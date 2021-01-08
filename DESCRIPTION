@@ -1,0 +1,35 @@
+Package: DevKidCC
+Title: Kidney Cell Classifier
+Version: 0.2.0
+Authors@R: 
+    person(given = "Sean",
+           family = "Wilson",
+           role = c("aut", "cre"),
+           email = "sean.wilson@mcri.edu.au",
+           comment = c(ORCID = "0000-0002-8994-0781"))
+Description: Thsi package takes a Seurat based single cell dataset and classifies the cells into their most likely kidney cell type.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
+Suggests: 
+    testthat (>= 2.1.0),
+    knitr,
+    rmarkdown
+Imports: 
+    ggplot2,
+    dplyr,
+    magrittr,
+    purrr,
+    networkD3,
+    rlang,
+    Seurat,
+    patchwork,
+    tibble,
+    utils,
+    formattable
+VignetteBuilder: knitr
+Depends: 
+    R (>= 2.10),
+    scPred

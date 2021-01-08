@@ -1,0 +1,6 @@
+git checkout --orphan temp
+git add --all
+git commit -am "initial commit"
+git branch -D main
+git branch -m main
+git push -f github main

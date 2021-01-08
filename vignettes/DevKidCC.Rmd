@@ -1,0 +1,23 @@
+---
+title: "DevKidCC"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{DevKidCC}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(DevKidCC)
+```
+
+# Introduction
+
+I'll reproduce the package_workflow document as a vignette.
