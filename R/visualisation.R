@@ -229,9 +229,12 @@ DotPlotCompare <- function(new.object = NULL,
 
 
   if (compare.to.organoids == TRUE) {
-    if (!exists("GE")){
+    if ("./data/GeneExpressionList.rda" %in% list.files(path = ".", all.files = T, recursive = T)){
       warning("Please refer to https://github.com/KidneyRegeneration/DevKidCC for instructions on downloading the database")
     } else {
+    if (!exists("GE")){
+      load(file = "./data/GeneExpressionList.rda")
+    }
     if (classification == "DKCC"){
       comp.data <- bind_rows(comp.data, GE$dkcc)
     }
