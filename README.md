@@ -21,7 +21,7 @@ devtools::install_github("KidneyRegeneration/DevKidCC", ref = "main")
 ```
 
 ## Standard Workflow
-
+A complete vignette is coming shortly.
 ### Running DevKidCC
 
 DevKidCC operates on single cell data as a Seurat object. The simplest workflow to use DevKidCC is:
