@@ -58,7 +58,7 @@ These can now be used to visualise score or classification outcomes on TSNE or U
 <br>
 
 ```{r, fig.height=9, fig.width=12}
-(DimPlot(organoid, group.by = "LineageID", cols = myColours()) | DimPlot(organoid, group.by = "DKCC", label = T, repel = T, cols = myColours())) /
+(DimPlot(organoid, group.by = "LineageID") | DimPlot(organoid, group.by = "DKCC", label = T, repel = T)) /
   (FeaturePlot(organoid, features = "scpred_Nephron", order = T) | FeaturePlot(organoid, features = "PAX2", order = T))
 ```
 
