@@ -3,4 +3,5 @@ inst/doc
 doc
 Meta
 backupdata
-
+data/GeneExpressionList.rda
+tests

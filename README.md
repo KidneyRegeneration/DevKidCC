@@ -7,9 +7,14 @@
 
 **DevKidCC** (*Dev*eloping *Kid*ney *C*ell *C*lassifier) is a tool that will classify single cell kidney data, both human tissue and human stem cell derived organoids. There is no pre-processing required, although we do recommend filtering out poor quality cells for most accurate representation of cell proportions.
 
+bioRxiv paper: [Wilson et al. 2021](https://doi.org/10.1101/2021.01.20.427346)
+
+<br>
+![Model Graphic](Model_Graphic.png)
+<br>
+
+
 ## Installation
-
-
 
 You can install **DevKidCC** from this repository using devtools: 
 
@@ -21,7 +26,9 @@ devtools::install_github("KidneyRegeneration/DevKidCC", ref = "main")
 ```
 
 ## Standard Workflow
-A complete vignette is coming shortly.
+
+Check out the full vignette which includes details on using the visualisation functions [here](https://github.com/KidneyRegeneration/DevKidCC/tree/main/vignettes/DevKidCC.html)
+
 ### Running DevKidCC
 
 DevKidCC operates on single cell data as a Seurat object. The simplest workflow to use DevKidCC is:
@@ -41,9 +48,7 @@ https://drive.google.com/file/d/1_6L0EKsYcHq2cS7cRK2NM5G6JCEZClW-/view?usp=shari
 
 Save this file in a data folder at the top level of your project. This will allow it to be loaded by the DotPlotCompare function when `compare.to.organoids = T`
 
-``` r
-DotPlotCompare(organoid, features = c("MALAT1", "NPHS1", "DAPL1"), compare.to.organoids = T)
-```
+
 
 Any issues submit a pull request or contact me at sean.wilson@mcri.edu.au
 

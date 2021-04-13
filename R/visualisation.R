@@ -216,7 +216,7 @@ DotPlotCompare <- function(new.object = NULL,
                            show = "gene",
                            split.by = "orig.ident",
                            scaling = "log",
-                           size = "Pct",
+                           size = "pct.exp",
                            idents = "all",
                            classification = "DKCC",
                            dot.min = 0.1,
@@ -236,11 +236,11 @@ DotPlotCompare <- function(new.object = NULL,
 
 
   if (compare.to.organoids == TRUE) {
-    if ("./data/GeneExpressionList.rda" %in% list.files(path = ".", all.files = T, recursive = T)){
+    if ("data/GeneExpressionList.rda" %!in% list.files(path = here::here(), all.files = T, recursive = T)){
       warning("Please refer to https://github.com/KidneyRegeneration/DevKidCC for instructions on downloading the database")
     } else {
     if (!exists("GE")){
-      load(file = "./data/GeneExpressionList.rda")
+      load(file = here::here("data/GeneExpressionList.rda"))
     }
     if (classification == "DKCC"){
       comp.data <- bind_rows(comp.data, GE$dkcc)
@@ -472,4 +472,17 @@ IdentBoxPlot <- function(data, group, identity = "orig.ident", component = "DKCC
 }
 
 
+myColours <- gplots::col2hex(c("grey", "grey",  "royalblue1", "brown", "darkgreen", "green", "skyblue","palevioletred4",
+                              "peachpuff2", "goldenrod", "tan2", "wheat3",
+                              "lightgreen", "palegreen4", "forestgreen", "goldenrod", "tan3", "lightskyblue3", "cyan", "royalblue3", "grey20",
+                              "orchid4", "orchid1", "maroon2", "magenta", "mediumpurple2",
+                              "orangered1", "wheat3", "goldenrod4"
+))
+#Create a custom color scale
 
+names(myColours) <-  c("OffTarget", "unassigned", "Endo", "Stroma", "NPC-like", "NPC", "Nephron", "UrEp",
+                      "EN", "DN", "PN", "RC",
+                      "EDT", "DT", "LOH", "EPT", "PT", "PEC", "EPod", "Pod", "Nephron_NC",
+                      "SPC", "CS", "MS", "MesS", "Stroma_NC",
+                      "UTip", "UOS", "UIS"
+)
