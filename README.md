@@ -27,7 +27,7 @@ devtools::install_github("KidneyRegeneration/DevKidCC", ref = "main")
 
 ## Standard Workflow
 
-Check out the full vignette which includes details on using the visualisation functions [here](https://github.com/KidneyRegeneration/DevKidCC/tree/main/vignettes/DevKidCC.html)
+Check out the full vignette which includes details on using the visualisation functions [here](http://htmlpreview.github.io/?https://github.com/KidneyRegeneration/DevKidCC/tree/main/vignettes/DevKidCC.html)
 
 ### Running DevKidCC
 
