@@ -10,7 +10,7 @@
 bioRxiv paper: [Wilson et al. 2021](https://doi.org/10.1101/2021.01.20.427346)
 
 <br>
-![Model Graphic](Model_Graphic.png)
+![Model Graphic](https://github.com/KidneyRegeneration/DevKidCC/blob/main/Model_Graphic.png)
 <br>
 
 
