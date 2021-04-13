@@ -15,8 +15,7 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
-#library(DevKidCC)
-devtools::load_all(here::here())
+library(DevKidCC)
 library(tidyverse)
 library(Seurat)
 ```
