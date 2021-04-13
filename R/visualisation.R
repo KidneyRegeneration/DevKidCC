@@ -368,7 +368,7 @@ DotPlotCompare <- function(new.object = NULL,
 
 
 
-#' Title
+#' IdentBoxPlot
 #'
 #' @param data
 #' @param identity
@@ -472,17 +472,27 @@ IdentBoxPlot <- function(data, group, identity = "orig.ident", component = "DKCC
 }
 
 
-myColours <- gplots::col2hex(c("grey", "grey",  "royalblue1", "brown", "darkgreen", "green", "skyblue","palevioletred4",
-                              "peachpuff2", "goldenrod", "tan2", "wheat3",
-                              "lightgreen", "palegreen4", "forestgreen", "goldenrod", "tan3", "lightskyblue3", "cyan", "royalblue3", "grey20",
-                              "orchid4", "orchid1", "maroon2", "magenta", "mediumpurple2",
-                              "orangered1", "wheat3", "goldenrod4"
-))
-#Create a custom color scale
+#' myColours
+#'
+#' @return returns a named vector of colours
+#' @export
+#'
+#' @examples
+myColours <- function(){
 
-names(myColours) <-  c("OffTarget", "unassigned", "Endo", "Stroma", "NPC-like", "NPC", "Nephron", "UrEp",
-                      "EN", "DN", "PN", "RC",
-                      "EDT", "DT", "LOH", "EPT", "PT", "PEC", "EPod", "Pod", "Nephron_NC",
-                      "SPC", "CS", "MS", "MesS", "Stroma_NC",
-                      "UTip", "UOS", "UIS"
-)
+  myColors <- gplots::col2hex(c("grey", "grey",  "royalblue1", "brown", "darkgreen", "green", "skyblue","palevioletred4",
+                                "peachpuff2", "goldenrod", "tan2", "wheat3",
+                                "lightgreen", "palegreen4", "forestgreen", "goldenrod", "tan3", "lightskyblue3", "cyan", "royalblue3", "grey20",
+                                "orchid4", "orchid1", "maroon2", "magenta", "mediumpurple2",
+                                "orangered1", "wheat3", "goldenrod4"
+  ))
+  #Create a custom color scale
+
+  names(myColors) <-  c("OffTarget", "unassigned", "Endo", "Stroma", "NPC-like", "NPC", "Nephron", "UrEp",
+                        "EN", "DN", "PN", "RC",
+                        "EDT", "DT", "LOH", "EPT", "PT", "PEC", "EPod", "Pod", "Nephron_NC",
+                        "SPC", "CS", "MS", "MesS", "Stroma_NC",
+                        "UTip", "UOS", "UIS"
+  )
+  return(myColors)
+}

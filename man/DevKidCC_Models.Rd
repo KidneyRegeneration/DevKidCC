@@ -27,7 +27,7 @@ An object of class \code{scPred} of length 1.
 
 An object of class \code{scPred} of length 1.
 
-An object of class \code{spec_tbl_df} (inherits from \code{tbl_df}, \code{tbl}, \code{data.frame}) with 906192 rows and 11 columns.
+An object of class \code{spec_tbl_df} (inherits from \code{tbl_df}, \code{tbl}, \code{data.frame}) with 843696 rows and 11 columns.
 }
 \usage{
 model1.all

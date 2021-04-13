@@ -54,11 +54,11 @@ Here we can see a comparison between the original identity of the cells `Identit
 <br>
 <br>
 These can now be used to visualise score or classification outcomes on TSNE or UMAP plots, once computed. 
-<br>**Hint:** make `cols = myColours` to replicate the colour scheme used in the paper and custom functions.
+<br>**Hint:** make `cols = myColours()` to replicate the colour scheme used in the paper and custom functions.
 <br>
 
 ```{r, fig.height=9, fig.width=12}
-(DimPlot(organoid, group.by = "LineageID", cols = myColours) | DimPlot(organoid, group.by = "DKCC", label = T, repel = T, cols = myColours)) /
+(DimPlot(organoid, group.by = "LineageID", cols = myColours()) | DimPlot(organoid, group.by = "DKCC", label = T, repel = T, cols = myColours())) /
   (FeaturePlot(organoid, features = "scpred_Nephron", order = T) | FeaturePlot(organoid, features = "PAX2", order = T))
 ```
 

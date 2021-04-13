@@ -9,7 +9,7 @@ DotPlotCompare(
   show = "gene",
   split.by = "orig.ident",
   scaling = "log",
-  size = "Pct",
+  size = "pct.exp",
   idents = "all",
   classification = "DKCC",
   dot.min = 0.1,
