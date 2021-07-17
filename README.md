@@ -44,7 +44,7 @@ This will cause a number of additional metadata to be added to the object. The f
 ### Loading organoid gene expression database
 
 The database is stored as an rda file and can be downloaded at the following link:
-https://drive.google.com/file/d/1_6L0EKsYcHq2cS7cRK2NM5G6JCEZClW-/view?usp=sharing
+https://drive.google.com/file/d/1wh551HvecgszizE8FCsXRD5CiQVYm3K6/view?usp=sharing
 
 Save this file in a data folder at the top level of your project. This will allow it to be loaded by the DotPlotCompare function when `compare.to.organoids = T`
 
