@@ -228,6 +228,7 @@ DotPlotCompare <- function(new.object = NULL,
                            scale.by = "radius",
                            features,
                            compare.to.organoids = FALSE,
+                           filter.samples = NULL,
                            columns = NULL) {
 
 
@@ -257,25 +258,29 @@ DotPlotCompare <- function(new.object = NULL,
     }
   }
 
+  if (!is.null(filter.samples)){
+    comp.data <- comp.data %>% filter(Identity %in% filter.samples)
+  }
+
   samples <- comp.data$Identity %>% unique()
 
   #features <- factor(features, levels = features)
   if (classification == "DKCC"){
     identity <- factor(c("Nephron_NC", "Stroma_NC", "NPC-like",
                          unique(comp.data$Component)), levels = c("NPC", "NPC-like", "EN", "EDT_EMT", "DT", "LOH",
-                                                           "EPT", "PT", "PEC", "EPod", "Pod", "Nephron_NC", "CC",
+                                                           "EPT", "PT", "PEC", "EPod", "Pod", "Nephron_NC",
                                                            "Tip", "OuterStalk", "InnerStalk", "Stroma_NC",
                                                            "SPC", "Cortex", "Medullary", "Mesangial", "Endothelial", "unassigned"))
   } else if (classification == "LineageID"){
     identity <- factor(c(unique(comp.data$Component), "unassigned", "NPC-like"), levels = c("Endothelial", "Stroma", "NPC", "NPC-like", "Nephron", "UrEp", "unassigned"))
   } else {
-    identity <- factor(c(unique(comp.data$Component), "unassigned"), levels = c("EN", "DN", "PN", "RC", "CC", "unassigned"))
+    identity <- factor(c(unique(comp.data$Component), "unassigned"), levels = c("EN", "DN", "PN", "RC", "unassigned"))
   }
 
   if(idents == "all"){
     identity <- identity
   } else if (idents == "nephron"){
-    identity <- identity[identity %in% c("NPC", "NPC-like", "EN", "EDT_EMT", "DT", "LOH", "EPT", "PT", "PEC", "EPod", "Pod", "CC", "UrEp")]
+    identity <- identity[identity %in% c("NPC", "NPC-like", "EN", "EDT_EMT", "DT", "LOH", "EPT", "PT", "PEC", "EPod", "Pod")]
   } else if (idents == "others"){
     identity <- identity[identity %in% c("SPC", "Cortex", "Medullary", "Mesangial", "Endothelial", "unassigned")]
   } else if (idents %in% identity){
@@ -384,9 +389,10 @@ DotPlotCompare <- function(new.object = NULL,
 #'
 #' @examples
 IdentBoxPlot <- function(data, group, identity = "orig.ident", component = "DKCC", feature = "MALAT1", column = T,
-                          show.unassigned = TRUE, show.pct = FALSE, show.gene.exp = FALSE, do.label = T){
+                          show.unassigned = TRUE, show.pct = FALSE, show.gene.exp = FALSE, do.label = T, scales = "free_y"){
   data.list <- SplitObject(data, split.by = group)
-  data.plot <- map2_dfr(data.list, names(data.list), ~GeneSummary(.x, identity = identity, split.by = component, features = feature) %>% mutate(Group = .y))
+  data.plot <- map2_dfr(data.list, names(data.list), ~GeneSummary(.x, identity = identity, split.by = component, features = feature) %>%
+                          mutate(Group = factor(.y, levels = levels(data@meta.data[, group]))))
 
   myColors <- gplots::col2hex(c("grey", "grey",  "royalblue1", "brown", "darkgreen", "green", "skyblue","palevioletred4",
                                 "peachpuff2", "goldenrod", "tan2", "wheat3",
@@ -452,7 +458,7 @@ IdentBoxPlot <- function(data, group, identity = "orig.ident", component = "DKCC
  #     #t <- geom_text(aes(label=ifelse((do.label==T & .data$Pct >= (ymax/10)), levels(.data$Component)[.data$Component], "")), size = 3,
  #     #               position=position_stack(vjust=0.5), colour="black")
  #   }
-    ymax <- max(map_dbl(unique(data.plot$Identity), ~sum(data.plot %>% filter(Identity==.x) %>% select(Pct))))
+    #ymax <- max(map_dbl(unique(data.plot$Identity), ~sum(data.plot %>% filter(Identity==.x) %>% select(Pct))))
  # }
 
 
@@ -462,11 +468,11 @@ IdentBoxPlot <- function(data, group, identity = "orig.ident", component = "DKCC
     geom_jitter(aes(colour = Group), position = position_dodge(width = 1)) +
     theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust = 0.5)) +
     theme(legend.title=element_text(size=rel(1.1))) +
-    scale_y_continuous(limits = c(0,ymax+10), expand = c(0, 0)) +
+    #scale_y_continuous(limits = c(0,ymax+10), expand = c(0, 0)) +
     if (column==T){
-      facet_wrap("Component", ncol = 1)
+      facet_wrap("Component", ncol = 1, scales = scales)
     } else {
-      facet_wrap("Component", nrow = 1)
+      facet_wrap("Component", nrow = 1, scales = scales)
     }
 
 }
@@ -496,3 +502,53 @@ myColours <- function(){
   )
   return(myColors)
 }
+
+
+GetSampleIDs <- function(sample = NULL,
+                         reference = NULL,
+                         type = NULL,
+                         base_protocol = NULL,
+                         modification = NULL,
+                         age = NULL,
+                         union = FALSE){
+
+  if (!exists(x = "sample_table")){
+    load(file = here::here("data/sample_table.rda"))
+  }
+
+  filter.list <- list()
+
+  if (!is.null(sample)){
+    filter.list[["f.sample"]] <- sample_table[sample_table$sample %in% sample,]
+  }
+
+  if (!is.null(reference)){
+    filter.list[["f.reference"]] <- sample_table[sample_table$reference %in% reference,]
+  }
+
+  if (!is.null(type)){
+    filter.list[["f.type"]] <- sample_table[sample_table$type %in% type,]
+  }
+
+  if (!is.null(base_protocol)){
+    filter.list[["f.base_protocol"]] <- sample_table[sample_table$base_protocol %in% base_protocol,]
+  }
+
+  if (!is.null(modification)){
+    filter.list[["f.modification"]] <- sample_table[sample_table$modification %in% modification,]
+  }
+
+  if (!is.null(age)){
+    filter.list[["f.age"]] <- sample_table[sample_table$age %in% age,]
+  }
+
+  if (union){
+    sample.ids <- Reduce(union, map(filter.list, ~.x$sample))
+  } else {
+    sample.ids <- Reduce(intersect, map(filter.list, ~.x$sample))
+  }
+
+  return(sample.ids)
+}
+
+
