@@ -10,15 +10,31 @@ GeneSummary(
   split.by = "DKCC",
   features = rownames(data),
   cells = colnames(data),
+  do.norm = FALSE,
   group.by = NULL
 )
 }
 \arguments{
-\item{group.by}{}
+\item{data}{seurat object}
+
+\item{identity}{column name in metadata describing required sample identity}
+
+\item{split.by}{column name in metadat describing required annotation/classification identity}
+
+\item{features}{features to use, defaults to all}
+
+\item{cells}{cells to use, defaults to all}
+
+\item{do.norm}{option to run normalisation on data if not already done, set TRUE if required}
+
+\item{group.by}{secondary grouping identity, default is NULL}
 }
 \value{
 
 }
 \description{
 GeneSummary
+}
+\examples{
+output <- GeneSummary(organoid, features = c("GAPDH", "SIX2", "JAG1", "EPCAM", "NPHS1"))
 }

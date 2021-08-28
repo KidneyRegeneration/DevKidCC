@@ -1,37 +1,26 @@
 #' ComponentPlot
 #'
-#' @param data
-#' @param identity
-#' @param component
-#' @param feature
-#' @param show.unassigned
-#' @param show.pct
-#' @param show.gene.exp
-#' @param do.label
+#' @param data seurat object
+#' @param identity column name in metadata for sample identity
+#' @param component column name in metadata for annotation/classification identity
+#' @param feature gene for expression visualisation, only shown if show.gene.exp is TRUE
+#' @param show.unassigned include unassigned cells in visualisation, TRUE by default
+#' @param show.pct change plot to show percentage of cells instead of total cell number
+#' @param show.gene.exp colour by expression of "feature" in each annotation category
+#' @param do.label add label to plot, TRUE by default
 #'
-#' @return
+#' @return ggplot object
 #' @export
 #'
 #' @examples
+#' ComponentPlot(organoid, show.pct = TRUE)
 ComponentPlot <- function(data, identity = "orig.ident", component = "DKCC", feature = "MALAT1",
                           show.unassigned = TRUE, show.pct = FALSE, show.gene.exp = FALSE, do.label = T){
   data.plot <- GeneSummary(data, identity = identity, split.by = component, features = feature)
 
-  myColors <- gplots::col2hex(c("grey", "grey",  "royalblue1", "brown", "darkgreen", "green", "skyblue","palevioletred4",
-                                "peachpuff2", "goldenrod", "tan2", "wheat3",
-                                "lightgreen", "palegreen4", "forestgreen", "goldenrod", "tan3", "lightskyblue3", "cyan", "royalblue3", "grey20",
-                                "orchid4", "orchid1", "maroon2", "magenta", "mediumpurple2",
-                                "orangered1", "wheat3", "goldenrod4"
-  ))
-  #Create a custom color scale
+  myColors <- myColours()
 
-  names(myColors) <-  c("OffTarget", "unassigned", "Endo", "Stroma", "NPC-like", "NPC", "Nephron", "UrEp",
-                        "EN", "DN", "PN", "RC",
-                        "EDT", "DT", "LOH", "EPT", "PT", "PEC", "EPod", "Pod", "Nephron_NC",
-                        "SPC", "CS", "MS", "MesS", "Stroma_NC",
-                        "UTip", "UOS", "UIS"
-  )
-  data.plot <- data.plot %>% filter(Cells>0)
+  data.plot <- data.plot %>% filter(.data$Cells>0)
 
   data.plot$Component <- factor(data.plot$Component, levels = names(myColors)[names(myColors) %in% unique(as.character(data.plot$Component))])
   if (!is.null(levels(data.plot$Identity))){
@@ -39,65 +28,65 @@ ComponentPlot <- function(data, identity = "orig.ident", component = "DKCC", fea
   }
 
 
-  data.plot <- data.plot %>% arrange(desc(Component))
+  data.plot <- data.plot %>% arrange(desc(.data$Component))
   if (show.unassigned == FALSE) {
-    data.plot <- data.plot %>% filter(Component != "unassigned")
+    data.plot <- data.plot %>% filter(.data$Component != "unassigned")
   }
 
   myColors <- myColors[levels(data.plot$Component)]
 
   fct.order <- levels(data@meta.data[[identity]])
-  data.plot <- data.plot %>% mutate(Identity = fct_relevel(Identity, fct.order))
+  data.plot <- data.plot %>% mutate(Identity = forcats::fct_relevel(.data$Identity, fct.order))
 
-  #ymax <- max(map_dbl(unique(data.plot$Identity), ~sum(data.plot %>% filter(Identity==.x) %>% select(Pct))))
+
   if (show.pct == FALSE){
     p <- ggplot(data.plot, aes(.data$Identity, .data$Cells))
 
     if (show.gene.exp == T) {
       title <- ggtitle(paste0(feature, " expression across ", component))
       b <- geom_bar(aes(fill = .data$avg.exp.log), stat = "Identity", colour = "black", width = 0.99)
-      max <- max(data.plot %>% filter(features.plot == feature) %>% select(avg.exp.log))
+      max <- max(data.plot %>% filter(.data$features.plot == feature) %>% select(.data$avg.exp.log))
 
-      #c <- scale_fill_gradient2(low = "lightgrey", mid = "navy", high = "red", midpoint = max/2, na.value = "black")
+
       c <- scale_fill_gradient2(low = "lightgrey", mid = "red", high = "green", midpoint = max/2, na.value = "black")
       t <- geom_text(aes(label=ifelse((do.label==T & .data$avg.exp.log >= (max/3)), levels(.data$Component)[.data$Component], "")), size = 3,
                      position=position_stack(vjust=0.5), colour="black")
     } else {
       title <- ggtitle(paste0(component, " cell numbers"))
       b <- geom_bar(aes(fill = .data$Component), stat = "Identity", colour = "black", width = 0.99)
-      #c <- scale_fill_manual(name = "Identity", values = (myColors[levels(data.plot$Component)]))
+
       c <- scale_fill_manual(name = "Identity", values = myColors)
       t <- geom_text(aes(label=ifelse((do.label==T & .data$Cells >= (ymax/10)), levels(.data$Component)[.data$Component], "")), size = 3,
                      position=position_stack(vjust=0.5), colour="black")
     }
-    ymax <- max(map_dbl(unique(data.plot$Identity), ~sum(data.plot %>% filter(Identity==.x) %>% select(Cells))))
+    ymax <- max(map_dbl(unique(data.plot$Identity), ~sum(data.plot %>% filter(.data$Identity==.x) %>% select(.data$Cells))))
   } else {
     p <- ggplot(data.plot, aes(.data$Identity, .data$Pct))
     if (show.gene.exp == T) {
       title <- ggtitle(paste0(feature, " expression across ", component))
       b <- geom_bar(aes(fill = .data$avg.exp.log), stat = "Identity", colour = "black", width = 0.99)
-      max <- max(data.plot %>% filter(features.plot == feature) %>% select(avg.exp.log))
+      max <- max(data.plot %>% filter(.data$features.plot == feature) %>% select(.data$avg.exp.log))
 
-      #c <- scale_fill_gradient2(low = "lightgrey", mid = "navy", high = "red", midpoint = max/2, na.value = "black")
+
       c <- scale_fill_gradient2(low = "lightgrey", mid = "red", high = "green", midpoint = max/2, na.value = "black")
       t <- geom_text(aes(label=ifelse((do.label==T & .data$avg.exp.log >= (max/3)), levels(.data$Component)[.data$Component], "")), size = 3,
                      position=position_stack(vjust=0.5), colour="black")
     } else {
       title <- ggtitle(paste0(component, " cell proportions"))
       b <- geom_bar(aes(fill = .data$Component), stat = "Identity", colour = "black", width = 0.99)
-      #c <- scale_fill_manual(name = "Identity", values = (myColors[levels(data.plot$Component)]))
+
       c <- scale_fill_manual(name = "Identity", values = myColors)
       t <- geom_text(aes(label=ifelse((do.label==T & .data$Pct >= (ymax/10)), levels(.data$Component)[.data$Component], "")), size = 3,
                      position=position_stack(vjust=0.5), colour="black")
     }
-    ymax <- max(map_dbl(unique(data.plot$Identity), ~sum(data.plot %>% filter(Identity==.x) %>% select(Pct))))
+    ymax <- max(map_dbl(unique(data.plot$Identity), ~sum(data.plot %>% filter(.data$Identity==.x) %>% select(Pct))))
   }
 
   p +
     b +
     t +
     theme_classic() +
-    theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust = 0.5)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 0.9, vjust = 1)) +
     theme(legend.title=element_text(size=rel(1.1))) +
     scale_y_continuous(limits = c(0,ymax+1), expand = c(0, 0)) +
     c +
@@ -106,75 +95,6 @@ ComponentPlot <- function(data, identity = "orig.ident", component = "DKCC", fea
 
 
 
-
-#' SankeyPlot
-#' @description Plots a Sankey diagram shown how the cells are from a category into the final classification
-#'
-#' @param data seurat object fot the data to be pulled from
-#' @param origin the meta.data column describing the origin identity
-#' @param height the height of the plot
-#' @param width the width of the plot
-#' @param fontsize the fontsize of the plot
-#' @param simple defualt is FALSE; TRUE changes to a direct plot going from the origin to final classification without intermediate steps shown
-#' @param forced default FALSE IF TRUE changes the outcome to show all cells force called into a cell type instead of being unassigned
-#' @param sinksRight default FALSE; graphing parameter from base plotting function that forces final identity to right side of graph
-#' @param LinkGroup Changes the way in which linking colours are plotted. Default is "Var3" representing the origin population
-#' @param remove.unassigned default FALSE; determines if unassigned values are removed from the plot
-#' @param nephron.only default FALSE; TRUE will plot only cell types that are classified into a nephron lineage
-#'
-#' @importFrom networkD3 sankeyNetwork
-#'
-#' @return the plot
-#' @export
-#'
-#'
-SankeyPlot <- function(data,
-                       simple = T,
-                       origin = "sample.id",
-                       end = "DKCC",
-                       height = 900,
-                       width = 1200,
-                       fontsize = 12,
-                       sinksRight = TRUE,
-                       LinkGroup = "Var1",
-                       remove.unassigned = F,
-                       nephron.only = F){
-
-  if (remove.unassigned==T){
-    .data$data <- data[, data$DKCC != "unassigned"]
-
-  }
-
-  if (nephron.only == T){
-    .data$data[, data$DKCC %!in% c("Stroma", "unassigned", "Non_Renal")]
-  }
-
-
-
-  if (simple == T){
-    links <- as.data.frame(table(data@meta.data[[origin]], data@meta.data[[end]]))
-  } else {
-    links <- as.data.frame(table(data@meta.data[[origin]], data@meta.data$LineageID)) %>% mutate(Var3 = .data$Var1)
-    links <- bind_rows(links, (as.data.frame(table(data$LineageID, data$DKCC, data@meta.data[[origin]]),
-                                             stringsAsFactors = F) %>% filter(Var1 != Var2))) %>% filter(.data$Freq!=0)
-
-  }
-  links <- filter(links, .data$Freq != 0)
-
-  nodes <- data.frame(name = c(as.character(links$Var1), as.character(links$Var2)),
-                      stringsAsFactors = F) %>% unique()
-
-  links$IDsource <- match(links$Var1, nodes$name)-1
-  links$IDtarget <- match(links$Var2, nodes$name)-1
-
-  p <- sankeyNetwork(Links = links, Nodes = nodes,
-                     Source = "IDsource", Target = "IDtarget",
-                     Value = "Freq", NodeID = "name",
-                     sinksRight=sinksRight, fontSize = fontsize,
-                     height = height, width = width, LinkGroup = LinkGroup)
-  return(p)
-
-}
 
 MinMax <- function(data, min, max) {
   data2 <- data
@@ -201,13 +121,16 @@ MinMax <- function(data, min, max) {
 #' @param scale.max maximum scale
 #' @param scale.by "radius" or "size"
 #' @param features features to plot
-#' @param compare.to "reference" or "organoids" will be displayed on the plot as a comparison
 #' @param scaling choose "log", "scale" or "raw" to change how the expression values are displayed
 #' @param classification choose "DKCC" or "LineageID"
 #' @param col.min minimum expression value to plot
 #' @param col.max maximum expression value to plot
+#' @param size how to scale the size of the dot, "pct.exp" for the percent of cells expressing the gene, "Pct" is percent of cells in identity
+#' @param compare.to.organoids if function should plot organoid samples from the database
+#' @param filter.samples if compare.to.organoids=T, can provide desired sample names here using the output from "GetSampleIDs".
+#' @param columns how many columns to plot. Default is to plot as square as possible.
 #'
-#' @return
+#' @return ggplot object
 #' @export
 #'
 
@@ -259,7 +182,7 @@ DotPlotCompare <- function(new.object = NULL,
   }
 
   if (!is.null(filter.samples)){
-    comp.data <- comp.data %>% filter(Identity %in% filter.samples)
+    comp.data <- comp.data %>% filter(.data$Identity %in% filter.samples)
   }
 
   samples <- comp.data$Identity %>% unique()
@@ -267,7 +190,7 @@ DotPlotCompare <- function(new.object = NULL,
   #features <- factor(features, levels = features)
   if (classification == "DKCC"){
     identity <- factor(c("Nephron_NC", "Stroma_NC", "NPC-like",
-                         unique(comp.data$Component)), levels = c("NPC", "NPC-like", "EN", "EDT_EMT", "DT", "LOH",
+                         unique(comp.data$Component)), levels = c("NPC", "NPC-like", "EN", "EDT", "DT", "LOH",
                                                            "EPT", "PT", "PEC", "EPod", "Pod", "Nephron_NC",
                                                            "Tip", "OuterStalk", "InnerStalk", "Stroma_NC",
                                                            "SPC", "Cortex", "Medullary", "Mesangial", "Endothelial", "unassigned"))
@@ -280,7 +203,7 @@ DotPlotCompare <- function(new.object = NULL,
   if(idents == "all"){
     identity <- identity
   } else if (idents == "nephron"){
-    identity <- identity[identity %in% c("NPC", "NPC-like", "EN", "EDT_EMT", "DT", "LOH", "EPT", "PT", "PEC", "EPod", "Pod")]
+    identity <- identity[identity %in% c("NPC", "NPC-like", "EN", "EDT", "DT", "LOH", "EPT", "PT", "PEC", "EPod", "Pod")]
   } else if (idents == "others"){
     identity <- identity[identity %in% c("SPC", "Cortex", "Medullary", "Mesangial", "Endothelial", "unassigned")]
   } else if (idents %in% identity){
@@ -303,7 +226,7 @@ DotPlotCompare <- function(new.object = NULL,
     data.plot <- comp.data %>% filter(.data$features.plot %in% features)
   }
   data.plot <-  data.plot %>%
-    filter(.data$Component %in% identity, !is.na(features.plot)) %>%
+    filter(.data$Component %in% identity, !is.na(.data$features.plot)) %>%
     mutate(id = factor(.data$Component, levels = levels(identity),),
            features.plot = factor(.data$features.plot, levels = features))
   data.plot$pct.exp[data.plot$pct.exp < dot.min] <- NA
@@ -359,14 +282,15 @@ DotPlotCompare <- function(new.object = NULL,
 
     guides(size = guide_legend(title = size.label)) +
 
-    theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust = 0.5),
+    theme(axis.text.x = element_text(angle = 45, hjust = 0.9, vjust = 1),
           panel.grid.major = element_line(colour = "gray"),
           #panel.background = element_rect(colour = "lightgray")
     ) +
     theme(legend.title=element_text(size=rel(0.5))) +
 
     labs(x = "Features", y = "Identity") +
-    facet_wrap(facets = facet, ncol = ifelse(is.null(columns), round(sqrt(length(unique(data.plot[, facet])))), columns))
+    facet_wrap(facets = facet, ncol = ifelse(is.null(columns), round(sqrt(length(unique(data.plot[, facet])))), columns)) +
+    geom_vline(xintercept = c(seq(0.5, (length(features)+0.5), 1)), col="black")
   return(plot)
 }
 
@@ -375,16 +299,20 @@ DotPlotCompare <- function(new.object = NULL,
 
 #' IdentBoxPlot
 #'
-#' @param data
-#' @param identity
-#' @param component
-#' @param feature
-#' @param show.unassigned
-#' @param show.pct
-#' @param show.gene.exp
-#' @param do.label
 #'
-#' @return
+#' @param data seurat object
+#' @param group grouping variable
+#' @param identity identity variable
+#' @param component annotation/classification column
+#' @param feature gene
+#' @param column show plots in columns (TRUE) or rows (FALSE)
+#' @param show.unassigned show unassigned cells
+#' @param show.pct plot by percentage instead of cell number
+#' @param show.gene.exp plot gene expression
+#' @param do.label label plots
+#' @param scales change the y scales, default is free_y
+#'
+#' @return ggplot object
 #' @export
 #'
 #' @examples
@@ -394,20 +322,7 @@ IdentBoxPlot <- function(data, group, identity = "orig.ident", component = "DKCC
   data.plot <- map2_dfr(data.list, names(data.list), ~GeneSummary(.x, identity = identity, split.by = component, features = feature) %>%
                           mutate(Group = factor(.y, levels = levels(data@meta.data[, group]))))
 
-  myColors <- gplots::col2hex(c("grey", "grey",  "royalblue1", "brown", "darkgreen", "green", "skyblue","palevioletred4",
-                                "peachpuff2", "goldenrod", "tan2", "wheat3",
-                                "lightgreen", "palegreen4", "forestgreen", "goldenrod", "tan3", "lightskyblue3", "cyan", "royalblue3", "grey20",
-                                "orchid4", "orchid1", "maroon2", "magenta", "mediumpurple2",
-                                "orangered1", "wheat3", "goldenrod4"
-  ))
-  #Create a custom color scale
-
-  names(myColors) <-  c("OffTarget", "unassigned", "Endo", "Stroma", "NPC-like", "NPC", "Nephron", "UrEp",
-                        "EN", "DN", "PN", "RC",
-                        "EDT", "DT", "LOH", "EPT", "PT", "PEC", "EPod", "Pod", "Nephron_NC",
-                        "SPC", "CS", "MS", "MesS", "Stroma_NC",
-                        "UTip", "UOS", "UIS"
-  )
+  myColors <- myColours()
   #data.plot <- data.plot %>% filter(Cells>0)
 
   data.plot$Component <- factor(data.plot$Component, levels = names(myColors)[names(myColors) %in% unique(as.character(data.plot$Component))])
@@ -416,15 +331,15 @@ IdentBoxPlot <- function(data, group, identity = "orig.ident", component = "DKCC
   }
 
 
-  data.plot <- data.plot %>% arrange(desc(Component))
+  data.plot <- data.plot %>% arrange(desc(.data$Component))
   if (show.unassigned == FALSE) {
-    data.plot <- data.plot %>% filter(Component != "unassigned")
+    data.plot <- data.plot %>% filter(.data$Component != "unassigned")
   }
 
   myColors <- myColors[levels(data.plot$Component)]
 
   fct.order <- levels(data@meta.data[[identity]])
-  data.plot <- data.plot %>% mutate(Identity = fct_relevel(Identity, fct.order))
+  data.plot <- data.plot %>% mutate(Identity = forcats::fct_relevel(.data$Identity, fct.order))
 
   #ymax <- max(map_dbl(unique(data.plot$Identity), ~sum(data.plot %>% filter(Identity==.x) %>% select(Pct))))
   #if (show.pct == FALSE){
@@ -463,9 +378,9 @@ IdentBoxPlot <- function(data, group, identity = "orig.ident", component = "DKCC
 
 
 
-  ggplot(data.plot, aes(Group, Pct)) +
-    geom_boxplot(aes(colour = Group), outlier.shape = NA, position = position_dodge(width=1), na.rm = F) +
-    geom_jitter(aes(colour = Group), position = position_dodge(width = 1)) +
+  ggplot(data.plot, aes(.data$Group, .data$Pct)) +
+    geom_boxplot(aes(colour = .data$Group), outlier.shape = NA, position = position_dodge(width=1), na.rm = F) +
+    geom_jitter(aes(colour = .data$Group), position = position_dodge(width = 1)) +
     theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust = 0.5)) +
     theme(legend.title=element_text(size=rel(1.1))) +
     #scale_y_continuous(limits = c(0,ymax+10), expand = c(0, 0)) +
@@ -484,6 +399,7 @@ IdentBoxPlot <- function(data, group, identity = "orig.ident", component = "DKCC
 #' @export
 #'
 #' @examples
+#' myColours()
 myColours <- function(){
 
   myColors <- gplots::col2hex(c("grey", "grey",  "royalblue1", "brown", "darkgreen", "green", "skyblue","palevioletred4",
@@ -500,10 +416,30 @@ myColours <- function(){
                         "SPC", "CS", "MS", "MesS", "Stroma_NC",
                         "UTip", "UOS", "UIS"
   )
+  levels(myColors) <-  c("OffTarget", "unassigned", "Endo", "Stroma", "NPC-like", "NPC", "Nephron", "UrEp",
+                        "EN", "DN", "PN", "RC",
+                        "EDT", "DT", "LOH", "EPT", "PT", "PEC", "EPod", "Pod", "Nephron_NC",
+                        "SPC", "CS", "MS", "MesS", "Stroma_NC",
+                        "UTip", "UOS", "UIS"
+  )
   return(myColors)
 }
 
 
+#' GetSampleIDs
+#'
+#' @param sample Not required
+#' @param reference Original publication reference eg. Howden_2019
+#' @param type can select either "Organoid" or "iUB" if required
+#' @param base_protocol Select base protocol/s of interest, including "Takasato", "Morizane", "Freedman", "Kumar", "Low", "Howden-Wilson", "Mae"
+#' @param modification TRUE/FALSE for if that base protocol was modified in some way
+#' @param age age range of organoids, string of integers eg. 1:18
+#' @param union if multiple fields are entered, use union=TRUE to select all samples or union=FALSE to select only the intersect i.e. samples selected from all fields
+#'
+#' @return string of sample IDs that can be input into DotPlotCompare.
+#' @export
+#'
+#' @examples
 GetSampleIDs <- function(sample = NULL,
                          reference = NULL,
                          type = NULL,
@@ -547,6 +483,7 @@ GetSampleIDs <- function(sample = NULL,
   } else {
     sample.ids <- Reduce(intersect, map(filter.list, ~.x$sample))
   }
+  sample.ids <- c(as.character(sample.ids), "Reference")
 
   return(sample.ids)
 }

@@ -4,11 +4,15 @@
 #' @param threshold minimum value for an identity to be assigned within the model call, default is 0.7
 #' @param max.iter Can ask scPred to run this number of integrations, set to 0 be default
 #'
-#' @return
+#' @return seurat object with additional metadata columns
 #' @export
 #'
+#' @aliases DevKidCC-function
+#'
 #' @examples
+#' organoid <- DevKidCC(organoid)
 DevKidCC <- function(seurat, threshold = 0.7, max.iter = 0) {
+
   if (("dkcc" %in% colnames(seurat@meta.data)) == FALSE){
     seurat@misc$old.meta <- seurat@meta.data
   } else {
@@ -24,11 +28,12 @@ DevKidCC <- function(seurat, threshold = 0.7, max.iter = 0) {
   seurat <- NormalizeData(seurat)
   dkcc <- data.frame()
 
-  seurat <- scPred::scPredict(seurat, reference = model1.all, threshold = threshold, max.iter.harmony=max.iter)
+  seurat <- scPred::scPredict(seurat, reference = model1.all, threshold = 0, max.iter.harmony=max.iter) # changed threshold to 0, all cells assigned
   seurat$scpred_prediction <- gsub("Endothelial", "Endo", seurat$scpred_prediction)
   colnames(seurat@meta.data) <- gsub("Endothelial", "Endo", colnames(seurat@meta.data))
   seurat$LineageID <- seurat$scpred_prediction
-  seurat@meta.data <- within(seurat@meta.data, LineageID[LineageID == 'NPC' & scpred_NPC < 0.9] <- 'NPC-like')
+  seurat$LineageID_max <- seurat$scpred_max
+  #seurat@meta.data <- within(seurat@meta.data, LineageID[LineageID == 'NPC' & scpred_NPC < 0.9] <- 'NPC-like') potentially move later.
 
   dkcc <- seurat@meta.data %>% rownames_to_column("cell") %>% filter(LineageID %in% c("unassigned", "NPC", "NPC-like", "Endo")) %>% transmute(cell = cell, dkcc = LineageID)
 
@@ -134,7 +139,14 @@ DevKidCC <- function(seurat, threshold = 0.7, max.iter = 0) {
 }
 
 
-
+UpdateThreshold <- function(seurat, threshold) {
+  md <- seurat@meta.data
+  thresh <- md$LineageID_max < threshold
+  md[thresh,]$LineageID <- "unassigned"
+  md[thresh,]$DKCC <- "unassigned"
+  seurat@md <- md
+  return(seurat)
+}
 
 
 

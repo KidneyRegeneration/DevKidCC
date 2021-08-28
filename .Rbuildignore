@@ -1,4 +1,9 @@
+^renv$
+^renv\.lock$
 ^DevKidCC\.Rproj$
 ^\.Rproj\.user$
 ^doc$
 ^Meta$
+^Model_Graphic.png
+^backupdata$
+^data.raw$

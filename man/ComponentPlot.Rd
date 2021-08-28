@@ -16,11 +16,28 @@ ComponentPlot(
 )
 }
 \arguments{
-\item{do.label}{}
+\item{data}{seurat object}
+
+\item{identity}{column name in metadata for sample identity}
+
+\item{component}{column name in metadata for annotation/classification identity}
+
+\item{feature}{gene for expression visualisation, only shown if show.gene.exp is TRUE}
+
+\item{show.unassigned}{include unassigned cells in visualisation, TRUE by default}
+
+\item{show.pct}{change plot to show percentage of cells instead of total cell number}
+
+\item{show.gene.exp}{colour by expression of "feature" in each annotation category}
+
+\item{do.label}{add label to plot, TRUE by default}
 }
 \value{
-
+ggplot object
 }
 \description{
 ComponentPlot
+}
+\examples{
+ComponentPlot(organoid, show.pct = TRUE)
 }

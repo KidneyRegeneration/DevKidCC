@@ -2,6 +2,7 @@
 % Please edit documentation in R/DevKidCC.R
 \name{DevKidCC}
 \alias{DevKidCC}
+\alias{DevKidCC-function}
 \title{DevKidCC}
 \usage{
 DevKidCC(seurat, threshold = 0.7, max.iter = 0)
@@ -14,8 +15,11 @@ DevKidCC(seurat, threshold = 0.7, max.iter = 0)
 \item{max.iter}{Can ask scPred to run this number of integrations, set to 0 be default}
 }
 \value{
-
+seurat object with additional metadata columns
 }
 \description{
 DevKidCC
+}
+\examples{
+organoid <- DevKidCC(organoid)
 }

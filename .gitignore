@@ -5,3 +5,7 @@ Meta
 backupdata
 data/GeneExpressionList.rda
 tests
+renv
+renv.lock
+vignettes
+data.raw

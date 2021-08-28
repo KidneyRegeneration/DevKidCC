@@ -4,9 +4,9 @@
 \name{DevKidCC-package}
 \alias{DevKidCC}
 \alias{DevKidCC-package}
-\title{DevKidCC: Kidney Cell Classifier}
+\title{DevKidCC: Developing Kidney Cell Classifier}
 \description{
-Thsi package takes a Seurat based single cell dataset and classifies the cells into their most likely kidney cell type.
+This package takes a Seurat single cell dataset and classifies the cells into their most likely developing kidney cell type.
 }
 \author{
 \strong{Maintainer}: Sean Wilson \email{sean.wilson@mcri.edu.au} (\href{https://orcid.org/0000-0002-8994-0781}{ORCID})

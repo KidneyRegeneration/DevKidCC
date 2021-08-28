@@ -1,21 +1,24 @@
 #' GeneSummary
 #'
-#' @param data
-#' @param identity
-#' @param split.by
-#' @param features
-#' @param group.by
+#' @param data seurat object
+#' @param identity column name in metadata describing required sample identity
+#' @param split.by column name in metadat describing required annotation/classification identity
+#' @param cells cells to use, defaults to all
+#' @param do.norm option to run normalisation on data if not already done, set TRUE if required
+#' @param features features to use, defaults to all
+#' @param group.by secondary grouping identity, default is NULL
 #'
-#' @return
 #' @export
 #'
 #' @examples
+#' output <- GeneSummary(organoid, features = c("GAPDH", "SIX2", "JAG1", "EPCAM", "NPHS1"))
 GeneSummary <-function(data,
                        identity = "orig.ident",
                        split.by = "DKCC",
                        #idents = NULL,
                        features = rownames(data),
                        cells = colnames(data),
+                       do.norm = FALSE,
                        group.by = NULL
 ){
   # gene proportion information
@@ -31,7 +34,7 @@ GeneSummary <-function(data,
   # gene expression information
 
   #cells <- unlist(x = CellsByIdentities(object = data, idents = NULL))
-  data <- NormalizeData(data)
+  if (do.norm==T){data <- NormalizeData(data)}
   data.features <- FetchData(object = data, vars = features,
                              cells = cells, slot = "data")
 

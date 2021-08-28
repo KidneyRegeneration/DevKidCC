@@ -21,6 +21,7 @@ DotPlotCompare(
   scale.by = "radius",
   features,
   compare.to.organoids = FALSE,
+  filter.samples = NULL,
   columns = NULL
 )
 }
@@ -32,6 +33,8 @@ DotPlotCompare(
 \item{split.by}{meta.data column to split the sample by, usually the sample column}
 
 \item{scaling}{choose "log", "scale" or "raw" to change how the expression values are displayed}
+
+\item{size}{how to scale the size of the dot, "pct.exp" for the percent of cells expressing the gene, "Pct" is percent of cells in identity}
 
 \item{idents}{Identities to display. Use "all" to show all segments, "nephron" to show all nephron segments, "others" to show all non-nephron segments, or a string of identities to select specific Identities}
 
@@ -53,10 +56,14 @@ DotPlotCompare(
 
 \item{features}{features to plot}
 
-\item{compare.to}{"reference" or "organoids" will be displayed on the plot as a comparison}
+\item{compare.to.organoids}{if function should plot organoid samples from the database}
+
+\item{filter.samples}{if compare.to.organoids=T, can provide desired sample names here using the output from "GetSampleIDs".}
+
+\item{columns}{how many columns to plot. Default is to plot as square as possible.}
 }
 \value{
-
+ggplot object
 }
 \description{
 DotPlotCompare

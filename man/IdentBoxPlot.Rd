@@ -14,14 +14,35 @@ IdentBoxPlot(
   show.unassigned = TRUE,
   show.pct = FALSE,
   show.gene.exp = FALSE,
-  do.label = T
+  do.label = T,
+  scales = "free_y"
 )
 }
 \arguments{
-\item{do.label}{}
+\item{data}{seurat object}
+
+\item{group}{grouping variable}
+
+\item{identity}{identity variable}
+
+\item{component}{annotation/classification column}
+
+\item{feature}{gene}
+
+\item{column}{show plots in columns (TRUE) or rows (FALSE)}
+
+\item{show.unassigned}{show unassigned cells}
+
+\item{show.pct}{plot by percentage instead of cell number}
+
+\item{show.gene.exp}{plot gene expression}
+
+\item{do.label}{label plots}
+
+\item{scales}{change the y scales, default is free_y}
 }
 \value{
-
+ggplot object
 }
 \description{
 IdentBoxPlot
