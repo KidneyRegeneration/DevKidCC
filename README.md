@@ -36,7 +36,7 @@ DevKidCC operates on single cell data as a Seurat object. The simplest workflow 
 ``` r
 library(DevKidCC)
 # read in seurat object
-organoid <- DevKidCC(organoid)  # use dataset 'organoid' included in package
+organoid <- DKCC(organoid)  # use dataset 'organoid' included in package
 ```
 This will cause a number of additional metadata to be added to the object. The first tier is labelled "LineageID" while the complete annotation is under "DKCC"
 

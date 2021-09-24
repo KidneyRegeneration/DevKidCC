@@ -1,4 +1,4 @@
-#' DevKidCC
+#' DKCC
 #'
 #' @param seurat seurat object
 #' @param threshold minimum value for an identity to be assigned within the model call, default is 0.7
@@ -7,11 +7,11 @@
 #' @return seurat object with additional metadata columns
 #' @export
 #'
-#' @aliases DevKidCC-function
+#' @aliases DKCC
 #'
 #' @examples
-#' organoid <- DevKidCC(organoid)
-DevKidCC <- function(seurat, threshold = 0.7, max.iter = 0) {
+#' organoid <- DKCC(organoid)
+DKCC <- function(seurat, threshold = 0.7, max.iter = 0) {
 
   if (("dkcc" %in% colnames(seurat@meta.data)) == FALSE){
     seurat@misc$old.meta <- seurat@meta.data
