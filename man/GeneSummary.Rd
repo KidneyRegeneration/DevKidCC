@@ -29,9 +29,6 @@ GeneSummary(
 
 \item{group.by}{secondary grouping identity, default is NULL}
 }
-\value{
-
-}
 \description{
 GeneSummary
 }

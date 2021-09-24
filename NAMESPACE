@@ -2,7 +2,7 @@
 
 export("%>%")
 export(ComponentPlot)
-export(DevKidCC)
+export(DKCC)
 export(DotPlotCompare)
 export(GeneSummary)
 export(GetSampleIDs)

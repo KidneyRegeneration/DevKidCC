@@ -1,6 +1,6 @@
 Package: DevKidCC
 Title: Developing Kidney Cell Classifier
-Version: 0.2.2
+Version: 0.2.3
 Authors@R: 
     person(given = "Sean",
            family = "Wilson",
