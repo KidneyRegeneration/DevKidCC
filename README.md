@@ -26,6 +26,8 @@ devtools::install_github("KidneyRegeneration/DevKidCC", ref = "main")
 ```
 Expected installation time is under 5 minutes for each package.
 
+This package has been successfully tested on both Windows and Linux systems.
+
 ## Standard Workflow
 
 Check out the full vignette which includes details on using the visualisation functions [here](https://htmlpreview.github.io/?https://github.com/KidneyRegeneration/DevKidCC/blob/main/vignettes/DevKidCC.html)
