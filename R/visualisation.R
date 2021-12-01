@@ -297,98 +297,76 @@ DotPlotCompare <- function(new.object = NULL,
 
 
 
-#' IdentBoxPlot
+#' IdentMeans
 #'
+#' @param data seurat object with DevKidCC annotation
+#' @param group identity to generate mean scores from - x axis
+#' @param identity individual samples
+#' @param component class of annotation of interest
 #'
-#' @param data seurat object
-#' @param group grouping variable
-#' @param identity identity variable
-#' @param component annotation/classification column
-#' @param feature gene
-#' @param column show plots in columns (TRUE) or rows (FALSE)
-#' @param show.unassigned show unassigned cells
-#' @param show.pct plot by percentage instead of cell number
-#' @param show.gene.exp plot gene expression
-#' @param do.label label plots
-#' @param scales change the y scales, default is free_y
-#'
-#' @return ggplot object
+#' @return
 #' @export
 #'
 #' @examples
-IdentBoxPlot <- function(data, group, identity = "orig.ident", component = "DKCC", feature = "MALAT1", column = T,
-                          show.unassigned = TRUE, show.pct = FALSE, show.gene.exp = FALSE, do.label = T, scales = "free_y"){
-  data.list <- SplitObject(data, split.by = group)
-  data.plot <- map2_dfr(data.list, names(data.list), ~GeneSummary(.x, identity = identity, split.by = component, features = feature) %>%
-                          mutate(Group = factor(.y, levels = levels(data@meta.data[, group]))))
+IdentMeans <- function(data, group = "protocol", identity = "orig.ident", component = "DKCC"){
 
   myColors <- myColours()
   #data.plot <- data.plot %>% filter(Cells>0)
 
-  data.plot$Component <- factor(data.plot$Component, levels = names(myColors)[names(myColors) %in% unique(as.character(data.plot$Component))])
-  if (!is.null(levels(data.plot$Identity))){
-    data.plot$Identity <- factor(data.plot$Identity, levels = levels(data@meta.data[, identity]))
-  }
+  plot.data <- data@meta.data
+  plot.data <- plot.data %>% filter(!is.na(component), !is.na(identity), !is.na(group))
+
+  plot.components <- unique(plot.data[, component])
+  plot.idents <- unique(plot.data[, identity])
+  plot.groups <- unique(plot.data[, group])
 
 
-  data.plot <- data.plot %>% arrange(desc(.data$Component))
-  if (show.unassigned == FALSE) {
-    data.plot <- data.plot %>% filter(.data$Component != "unassigned")
-  }
+  abc <- plot.data %>% transmute(identity = plot.data[,identity],
+                                 component = factor(plot.data[, component], levels = unique(plot.data[, component])),
+                                 group = plot.data[, group])
 
-  myColors <- myColors[levels(data.plot$Component)]
-
-  fct.order <- levels(data@meta.data[[identity]])
-  data.plot <- data.plot %>% mutate(Identity = forcats::fct_relevel(.data$Identity, fct.order))
-
-  #ymax <- max(map_dbl(unique(data.plot$Identity), ~sum(data.plot %>% filter(Identity==.x) %>% select(Pct))))
-  #if (show.pct == FALSE){
-  #  p <- ggplot(data.plot, aes(.data$Identity, .data$Cells))
-  #
-  #  if (show.gene.exp == T) {
-  #    title <- ggtitle(paste0(feature, " expression across ", component))
-  #    b <- geom_bar(aes(fill = .data$avg.exp.log), stat = "Identity", colour = "black", width = 0.99)
-  #    max <- max(data.plot %>% filter(features.plot == feature) %>% select(avg.exp.log))
-  #
-  #    #c <- scale_fill_gradient2(low = "lightgrey", mid = "navy", high = "red", midpoint = max/2, na.value = "black")
-  #    c <- scale_fill_gradient2(low = "lightgrey", mid = "red", high = "green", midpoint = max/2, na.value = "black")
-  #    t <- geom_text(aes(label=ifelse((do.label==T & .data$avg.exp.log >= (max/3)), levels(.data$Component)[.data$Component], "")), size = 3,
-  #                   position=position_stack(vjust=0.5), colour="black")
-  #  } else {
-  #    title <- ggtitle(paste0(component, " cell numbers"))
-  #    b <- geom_bar(aes(fill = .data$Component), stat = "Identity", colour = "black", width = 0.99)
-  #    #c <- scale_fill_manual(name = "Identity", values = (myColors[levels(data.plot$Component)]))
-  #    c <- scale_fill_manual(name = "Identity", values = myColors)
-  #    t <- geom_text(aes(label=ifelse((do.label==T & .data$Cells >= (ymax/10)), levels(.data$Component)[.data$Component], "")), size = 3,
-  #                   position=position_stack(vjust=0.5), colour="black")
-  #  }
-  #  ymax <- max(map_dbl(unique(data.plot$Identity), ~sum(data.plot %>% filter(Identity==.x) %>% select(Cells))))
-  #} else {
- #   p <- ggplot(data.plot, aes(.data$Component, .data$Pct))
- #
- #     title <- ggtitle(paste0(component, " cell proportions"))
- #     b <- geom_jitter(aes(colour = .data$Group))
- #     #c <- scale_fill_manual(name = "Identity", values = (myColors[levels(data.plot$Component)]))
- #     #c <- scale_fill_manual(name = "Identity", values = myColors)
- #     #t <- geom_text(aes(label=ifelse((do.label==T & .data$Pct >= (ymax/10)), levels(.data$Component)[.data$Component], "")), size = 3,
- #     #               position=position_stack(vjust=0.5), colour="black")
- #   }
-    #ymax <- max(map_dbl(unique(data.plot$Identity), ~sum(data.plot %>% filter(Identity==.x) %>% select(Pct))))
- # }
+  total.n <- abc %>%
+    group_by(identity) %>%
+    summarise(total.cells = n())
 
 
+  identity.n <- map_df(plot.groups, ~as.data.frame(table((abc %>% filter(group == .x))$identity, (abc %>% filter(group == .x))$component)) %>%
+                         `colnames<-`(c("identity", "component", "ident.cells")))
 
-  ggplot(data.plot, aes(.data$Group, .data$Pct)) +
-    geom_boxplot(aes(colour = .data$Group), outlier.shape = NA, position = position_dodge(width=1), na.rm = F) +
-    geom_jitter(aes(colour = .data$Group), position = position_dodge(width = 1)) +
-    theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust = 0.5)) +
-    theme(legend.title=element_text(size=rel(1.1))) +
-    #scale_y_continuous(limits = c(0,ymax+10), expand = c(0, 0)) +
-    if (column==T){
-      facet_wrap("Component", ncol = 1, scales = scales)
-    } else {
-      facet_wrap("Component", nrow = 1, scales = scales)
-    }
+  identity.group <- as.data.frame(table(plot.data[,identity], plot.data[,group])) %>% filter(Freq>0) %>% transmute(identity = Var1, group = Var2)
+
+  pct.n <- left_join(total.n, identity.n, by = "identity") %>% mutate(percentage = (ident.cells/total.cells*100) %>% round(digits = 2)) %>%
+    left_join(identity.group, by = "identity") %>% filter(!is.na(percentage))
+
+  summary.n <- map_df(plot.groups, ~pct.n %>% group_by(group, component) %>% filter(group == .x) %>%
+                        summarise(n = n(),
+                                  mean = mean(percentage),
+                                  sd = sd(percentage)) %>% mutate(sem = sd/sqrt(n)))
+
+
+  myColors <- myColors[names(myColors) %in% unique(summary.n$component)]
+
+  fct.order <- names(myColors)
+  plot.components <- fct.order
+  summary.n <- summary.n %>% mutate(component = forcats::fct_relevel(component, fct.order))
+  pct.n <- pct.n %>% mutate(component = forcats::fct_relevel(component, fct.order))
+
+
+  #t.test((pct.n %>% filter(component=="Stroma", group == "Freedman"))$percentage, (pct.n %>% filter(component=="Stroma", group == "Morizane"))$percentage)
+
+  map(plot.components, ~summary.n %>% filter(component==.x) %>% ggplot() +
+        geom_point(aes(group, mean, colour = group, group = group), size = 2, position = position_dodge(width = 0.5)) +
+        geom_errorbar(aes(x=group, ymin=mean-sem, ymax=mean+sem, colour=group), width=0.5, alpha=1, size=.75, position = position_dodge(width = 0.5)) +
+        geom_point(inherit.aes = F, data = (pct.n %>% filter(component==.x)),
+                   aes(group, percentage, colour = group, group = group), size = 1, alpha = 0.5) +
+        theme_bw() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 0.9, vjust = 1)) +
+        theme(legend.title=element_text(size=rel(1.1)),
+              axis.title = element_blank(),
+              plot.title = element_text(hjust = 0.5)) +
+        ggtitle(label = .x) +
+        scale_y_continuous(expand = c(0, 0), limits = c(0,NA))) %>%
+    patchwork::wrap_plots(nrow = 1, guides = "collect")
 
 }
 

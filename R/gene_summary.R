@@ -18,7 +18,7 @@ GeneSummary <-function(data,
                        #idents = NULL,
                        features = rownames(data),
                        cells = colnames(data),
-                       do.norm = FALSE,
+                       do.norm = T,
                        group.by = NULL
 ){
   # gene proportion information
@@ -30,7 +30,7 @@ GeneSummary <-function(data,
   colnames(df) <- c("Identity", "Component", "Cells")
   df <- left_join(df, id, "Identity")
   df$Pct <- round((df$Cells / df$CellTotal * 100), digits = 2)
-
+  DefaultAssay(data) <- "RNA"
   # gene expression information
 
   #cells <- unlist(x = CellsByIdentities(object = data, idents = NULL))
