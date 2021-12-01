@@ -14,6 +14,8 @@
 #' @importFrom forcats fct_relevel
 #' @importFrom rlang .data
 #'
+#' @name DevKidCC-package
+#' @docType package
 #' @aliases DevKidCC-package
 #'
 # The following block is used by usethis to automatically manage

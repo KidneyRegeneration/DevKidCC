@@ -7,3 +7,7 @@
 ^Model_Graphic.png
 ^backupdata$
 ^data.raw$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^index.md
