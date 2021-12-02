@@ -24,6 +24,9 @@ devtools::install_github("powellgenomicslab/scPred")
 # DevKidCC itself
 devtools::install_github("KidneyRegeneration/DevKidCC", ref = "main")
 ```
+Expected installation time is under 5 minutes for each package.
+
+This package has been successfully tested on both Windows and Linux systems.
 
 ## Standard Workflow
 
