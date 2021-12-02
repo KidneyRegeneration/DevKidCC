@@ -28,6 +28,9 @@ devtools::install_github("powellgenomicslab/scPred")
 # DevKidCC itself
 devtools::install_github("KidneyRegeneration/DevKidCC", ref = "main")
 ```
+Expected installation time is under 5 minutes for each package.
+
+This package has been successfully tested on both Windows and Linux systems.
 
 ## Standard Workflow
 
@@ -40,7 +43,7 @@ DevKidCC operates on single cell data as a Seurat object. The simplest workflow 
 ``` r
 library(DevKidCC)
 # read in seurat object
-organoid <- DevKidCC(organoid)  # use dataset 'organoid' included in package
+organoid <- DKCC(organoid)  # use dataset 'organoid' included in package
 ```
 This will cause a number of additional metadata to be added to the object. The first tier is labelled "LineageID" while the complete annotation is under "DKCC"
 
@@ -52,7 +55,6 @@ https://drive.google.com/file/d/1wh551HvecgszizE8FCsXRD5CiQVYm3K6/view?usp=shari
 
 Save this file in a data folder at the top level of your project. This will allow it to be loaded by the DotPlotCompare function when `compare.to.organoids = T`
 
-## Shiny app
 
-https://sbwilson91.shinyapps.io/devkidcc_interactive/
 
+Any issues submit a pull request or contact me at sean.wilson@mcri.edu.au
