@@ -9,5 +9,4 @@ renv
 renv.lock
 vignettes
 data.raw
-docs
-_pkgdown.yml
+
