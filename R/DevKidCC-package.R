@@ -8,7 +8,8 @@
 #' @importFrom tibble rownames_to_column column_to_rownames
 #' @importFrom scPred scPredict
 #' @importFrom patchwork plot_layout wrap_plots
-#' @importFrom Seurat DimPlot NoLegend FetchData CellsByIdentities Idents CreateSeuratObject DefaultAssay<- NormalizeData MinMax Idents<- SplitObject
+#' @importFrom Seurat DimPlot NoLegend FetchData CellsByIdentities Idents CreateSeuratObject DefaultAssay<- NormalizeData MinMax Idents<- SplitObject ScaleData FindVariableFeatures
+#' @importFrom Seurat RunUMAP FindNeighbors FindClusters RunPCA
 #' @importFrom magrittr %>%
 #' @importFrom purrr map map2 map_dbl map2_dfr
 #' @importFrom forcats fct_relevel

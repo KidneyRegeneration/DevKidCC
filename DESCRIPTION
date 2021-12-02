@@ -22,14 +22,12 @@ Imports:
     dplyr,
     magrittr,
     purrr,
-    networkD3,
     rlang,
     Seurat,
     patchwork,
     tibble,
     utils,
-    forcats,
-    formattable
+    forcats
 VignetteBuilder: knitr
 Depends: 
     R (>= 2.10),

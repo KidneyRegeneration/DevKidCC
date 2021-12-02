@@ -4,7 +4,7 @@
 \alias{DKCC}
 \title{DKCC}
 \usage{
-DKCC(seurat, threshold = 0.7, max.iter = 0)
+DKCC(seurat, threshold = 0.7, max.iter = 1)
 }
 \arguments{
 \item{seurat}{seurat object}

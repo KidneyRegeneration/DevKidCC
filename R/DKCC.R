@@ -166,12 +166,12 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
 }
 
 
-UpdateThreshold <- function(seurat, threshold) {
-  md <- seurat@meta.data
-  thresh <- md$LineageID_max < threshold
-  md[thresh,]$LineageID <- "unassigned"
-  md[thresh,]$DKCC <- "unassigned"
-  seurat@md <- md
-  return(seurat)
-}
-
+#UpdateThreshold <- function(seurat, threshold) {
+#  md <- seurat@meta.data
+#  thresh <- md$LineageID_max < threshold
+#  md[thresh,]$LineageID <- "unassigned"
+#  md[thresh,]$DKCC <- "unassigned"
+#  seurat@md <- md
+#  return(seurat)
+#}
+#

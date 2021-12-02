@@ -10,7 +10,7 @@ GeneSummary(
   split.by = "DKCC",
   features = rownames(data),
   cells = colnames(data),
-  do.norm = FALSE,
+  do.norm = T,
   group.by = NULL
 )
 }
