@@ -30,7 +30,7 @@ This package has been successfully tested on both Windows and Linux systems.
 
 ## Standard Workflow
 
-Check out the full vignette which includes details on using the visualisation functions [here](https://htmlpreview.github.io/?https://github.com/KidneyRegeneration/DevKidCC/blob/main/vignettes/DevKidCC.html)
+Check out the full vignette which includes details on using the visualisation functions [here](https://kidneyregeneration.github.io/DevKidCC/index.html)
 
 ### Running DevKidCC
 
