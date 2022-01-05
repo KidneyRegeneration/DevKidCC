@@ -192,10 +192,10 @@ DotPlotCompare <- function(new.object = NULL,
     identity <- factor(c("Nephron_NC", "Stroma_NC", "NPC-like",
                          unique(comp.data$Component)), levels = c("NPC", "NPC-like", "EN", "EDT", "DT", "LOH",
                                                            "EPT", "PT", "PEC", "EPod", "Pod", "Nephron_NC",
-                                                           "Tip", "OuterStalk", "InnerStalk", "Stroma_NC",
-                                                           "SPC", "Cortex", "Medullary", "Mesangial", "Endothelial", "unassigned"))
+                                                           "UTip", "UOS", "UIS", "Stroma_NC",
+                                                           "SPC", "CS", "MS", "MesS", "Endo", "unassigned"))
   } else if (classification == "LineageID"){
-    identity <- factor(c(unique(comp.data$Component), "unassigned", "NPC-like"), levels = c("Endothelial", "Stroma", "NPC", "NPC-like", "Nephron", "UrEp", "unassigned"))
+    identity <- factor(c(unique(comp.data$Component), "unassigned", "NPC-like"), levels = c("Endo", "Stroma", "NPC", "NPC-like", "Nephron", "UrEp", "unassigned"))
   } else {
     identity <- factor(c(unique(comp.data$Component), "unassigned"), levels = c("EN", "DN", "PN", "RC", "unassigned"))
   }
@@ -204,12 +204,14 @@ DotPlotCompare <- function(new.object = NULL,
     identity <- identity
   } else if (idents == "nephron"){
     identity <- identity[identity %in% c("NPC", "NPC-like", "EN", "EDT", "DT", "LOH", "EPT", "PT", "PEC", "EPod", "Pod")]
+  } else if (idents == "ureteric"){
+    identity <- identity[identity %in% c("UTip", "UIS", "UOS")]
   } else if (idents == "others"){
-    identity <- identity[identity %in% c("SPC", "Cortex", "Medullary", "Mesangial", "Endothelial", "unassigned")]
+    identity <- identity[identity %in% c("SPC", "CS", "MS", "MesS", "Endo", "unassigned")]
   } else if (idents %in% identity){
     identity <- identity[identity %in% idents]
   } else {
-    warning("This call needs to specify identities eg. all, nephron, others, or specific identities")
+    warning("This call needs to specify identities eg. all, nephron, ureteric, others, or specific identities")
   }
   if (!is.null(new.object)){
     id <- split.by
