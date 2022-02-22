@@ -8,7 +8,7 @@
 **DevKidCC** (*Dev*eloping *Kid*ney *C*ell *C*lassifier) is a tool that will classify single cell kidney data, both human tissue and human stem cell derived organoids. There is no pre-processing required, although we do recommend filtering out poor quality cells for most accurate representation of cell proportions.
 
 bioRxiv paper: [Wilson et al. 2021](https://doi.org/10.1101/2021.01.20.427346)
-
+Now published in Genome Medicine: [Wilson et al., 2022](https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-022-01023-z)
 <br>
 <img src="./Model_Graphic.png">
 <br>
