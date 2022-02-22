@@ -38,10 +38,6 @@ navbar:
         href: articles/ShinyApp.html
       - text: Workflow
         href: articles/Workflow.html
-      - text: "Wilson et al., 2021"
-        href: articles/Wilson2021.html
-      - text: WorkflowOrig
-        href: ../vignettes/Workflow.html
     authors:
       Sean Wilson:
         href: https://github.com/sbwilson91
