@@ -155,8 +155,10 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
   npcs$orig.ident <- "all"
   markers <- DevKidCC::GeneSummary(npcs, identity = "orig.ident", split.by = "RNA_snn_res.0.5", features = c("PAX2"))
   pax2null <- (markers %>% filter(pct.exp<33))$Component
+  if (length(pax2null)>0){
   names <- colnames(npcs[, npcs$RNA_snn_res.0.5 %in% pax2null])
   old.seurat@meta.data <- within(old.seurat@meta.data, LineageID[LineageID %in% c('NPC') & rownames(old.seurat@meta.data) %in% names] <- 'NPC-like')
+  }
   old.seurat@meta.data <- within(old.seurat@meta.data, DKCC[DKCC %in% c('NPC') & rownames(old.seurat@meta.data) %in% names] <- 'NPC-like')
 
   old.seurat@misc$NPC.seu <- npcs
