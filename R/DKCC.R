@@ -158,8 +158,10 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
   if (length(pax2null)>0){
   names <- colnames(npcs[, npcs$RNA_snn_res.0.5 %in% pax2null])
   old.seurat@meta.data <- within(old.seurat@meta.data, LineageID[LineageID %in% c('NPC') & rownames(old.seurat@meta.data) %in% names] <- 'NPC-like')
-  }
   old.seurat@meta.data <- within(old.seurat@meta.data, DKCC[DKCC %in% c('NPC') & rownames(old.seurat@meta.data) %in% names] <- 'NPC-like')
+  } else {
+    old.seurat@meta.data <- within(old.seurat@meta.data, DKCC[DKCC %in% c('NPC')] <- 'NPC-like')
+  }
 
   old.seurat@misc$NPC.seu <- npcs
 
