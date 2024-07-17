@@ -25,7 +25,7 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
   #  seurat@meta.data %>% rownames_to_column("celltemp") %>% select(-cell) %>% column_to_rownames("celltemp")
   #}
   old.seurat <- seurat
-  seurat <- CreateSeuratObject(old.seurat@assays$RNA@layers$counts, meta.data = md)
+  seurat <- CreateSeuratObject(old.seurat@assays$RNA@counts, meta.data = md)
   DefaultAssay(seurat) <- "RNA"
   seurat <- NormalizeData(seurat)
   dkcc <- data.frame()
