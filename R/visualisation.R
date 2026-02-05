@@ -24,7 +24,7 @@ ComponentPlot <- function(data, identity = "orig.ident", component = "DKCC", fea
 
   data.plot$Component <- factor(data.plot$Component, levels = names(myColors)[names(myColors) %in% unique(as.character(data.plot$Component))])
   if (!is.null(levels(data.plot$Identity))){
-    data.plot$Identity <- factor(data.plot$Identity, levels = levels(data@meta.data[, identity]))
+    data.plot$Identity <- factor(data.plot$Identity, levels = levels(data[[identity]]))
   }
 
 
@@ -35,7 +35,7 @@ ComponentPlot <- function(data, identity = "orig.ident", component = "DKCC", fea
 
   myColors <- myColors[levels(data.plot$Component)]
 
-  fct.order <- levels(data@meta.data[[identity]])
+  fct.order <- levels(data[[identity]])
   data.plot <- data.plot %>% mutate(Identity = forcats::fct_relevel(.data$Identity, fct.order))
 
 
@@ -218,10 +218,10 @@ DotPlotCompare <- function(new.object = NULL,
     new.data <- GeneSummary(new.object, features = features, split.by = classification, identity = id)
     data.plot <- bind_rows(new.data,
                            comp.data %>% filter(.data$features.plot %in% features))
-    if (is.null(levels(new.object@meta.data[[split.by]]))){
-      samples <- c(samples, as.character(unique(new.object@meta.data[[split.by]])))
+    if (is.null(levels(new.object[[split.by]]))){
+      samples <- c(samples, as.character(unique(new.object[[split.by]])))
     } else {
-      samples <- c(samples, levels(new.object@meta.data[[split.by]]))
+      samples <- c(samples, levels(new.object[[split.by]]))
     }
 
   } else {
@@ -315,7 +315,7 @@ IdentMeans <- function(data, group = "protocol", identity = "orig.ident", compon
   myColors <- myColours()
   #data.plot <- data.plot %>% filter(Cells>0)
 
-  plot.data <- data@meta.data
+  plot.data <- data[[]]
   plot.data <- plot.data %>% filter(!is.na(component), !is.na(identity), !is.na(group))
 
   plot.components <- unique(plot.data[, component])

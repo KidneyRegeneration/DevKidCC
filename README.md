@@ -2,10 +2,14 @@
 # DevKidCC
 
 <!-- badges: start -->
-[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://www.tidyverse.org/lifecycle/#experimental)
+[![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://www.tidyverse.org/lifecycle/#stable)
+[![Seurat v5](https://img.shields.io/badge/Seurat-v5-blue.svg)](https://satijalab.org/seurat/)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](https://github.com/KidneyRegeneration/DevKidCC)
 <!-- badges: end -->
 
 **DevKidCC** (*Dev*eloping *Kid*ney *C*ell *C*lassifier) is a tool that will classify single cell kidney data, both human tissue and human stem cell derived organoids. There is no pre-processing required, although we do recommend filtering out poor quality cells for most accurate representation of cell proportions.
+
+**Version 0.4.0** brings full Seurat v5 compatibility including support for multi-layer objects (integrated datasets, multi-sample experiments). See [VERSION_CHANGELOG.md](VERSION_CHANGELOG.md) for details.
 
 bioRxiv paper: [Wilson et al. 2021](https://doi.org/10.1101/2021.01.20.427346) <br>
 Genome Medicine: [Wilson et al., 2022](https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-022-01023-z)

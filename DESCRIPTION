@@ -1,11 +1,11 @@
 Package: DevKidCC
 Title: Developing Kidney Cell Classifier
-Version: 0.3.0
+Version: 0.4.0
 Authors@R: 
     person(given = "Sean",
            family = "Wilson",
            role = c("aut", "cre"),
-           email = "sean.wilson@mcri.edu.au",
+           email = "sbwilson91@gmail.com",
            comment = c(ORCID = "0000-0002-8994-0781"))
 Description: This package takes a Seurat single cell dataset and classifies the cells into their most likely developing kidney cell type.
 License: MIT + file LICENSE
@@ -17,18 +17,19 @@ Suggests:
     testthat (>= 2.1.0),
     knitr,
     rmarkdown
-Imports: 
+Imports:
+    SeuratObject (>= 5.0.0),
+    Seurat (>= 5.0.0),
     ggplot2,
     dplyr,
     magrittr,
     purrr,
     rlang,
-    Seurat,
     patchwork,
     tibble,
     utils,
     forcats
 VignetteBuilder: knitr
 Depends: 
-    R (>= 2.10),
+    R (>= 4.0.0),
     scPred

@@ -23,8 +23,8 @@ GeneSummary <-function(data,
 ){
   # gene proportion information
   Idents(data) <- identity
-  df <- as.data.frame(table(data@meta.data[[paste0(identity)]],
-                            data@meta.data[[paste0(split.by)]]))
+  df <- as.data.frame(table(data[[paste0(identity)]],
+                            data[[paste0(split.by)]]))
   id <- as.data.frame(table(data[[paste0(identity)]]))
   colnames(id) <- c("Identity", "CellTotal")
   colnames(df) <- c("Identity", "Component", "Cells")
@@ -33,10 +33,19 @@ GeneSummary <-function(data,
   DefaultAssay(data) <- "RNA"
   # gene expression information
 
+  # Handle Seurat v5 multi-layer objects
+  if (inherits(data[["RNA"]], "Assay5")) {
+    layers <- SeuratObject::Layers(data, search = "data")
+    if (length(layers) > 1) {
+      message("Detected ", length(layers), " data layers. Joining layers for GeneSummary...")
+      data[["RNA"]] <- SeuratObject::JoinLayers(data[["RNA"]])
+    }
+  }
+
   #cells <- unlist(x = CellsByIdentities(object = data, idents = NULL))
   if (do.norm==T){data <- NormalizeData(data)}
   data.features <- FetchData(object = data, vars = features,
-                             cells = cells, slot = "data")
+                             cells = cells, layer = "data")
 
   data.features$id <- if (is.null(x = group.by)) {
     Idents(object = data)[cells, drop = TRUE]
@@ -120,10 +129,10 @@ GeneSummary <-function(data,
     data.plot$sample <- sample.id[,2]
   }
 
-  #if (is.null(levels(data@meta.data[[split.by]]))){
-  #  data.plot$sample <- factor(data.plot$sample, levels = as.character(unique(data@meta.data[[split.by]])))
+  #if (is.null(levels(data[[split.by]]))){
+  #  data.plot$sample <- factor(data.plot$sample, levels = as.character(unique(data[[split.by]])))
   #} else {
-  #  data.plot$sample <- factor(data.plot$sample, levels = levels(data@meta.data[[split.by]]))
+  #  data.plot$sample <- factor(data.plot$sample, levels = levels(data[[split.by]]))
   #}
 
   data.plot <- left_join(df, data.plot, by = c("Component" = "sample", "Identity" = "id")) %>% select(c("Identity", "Component", "Cells", "Pct", "avg.exp", "pct.exp",
