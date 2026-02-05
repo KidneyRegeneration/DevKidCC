@@ -24,6 +24,11 @@ Released: 2026-02-05
 * **Critical fix**: DKCC main function now works with multi-layer Assay5 objects (#issue-multi-layer)
 * **Critical fix**: GeneSummary function now works with multi-layer Assay5 objects
 * **Critical fix**: Corrected namespace - `LayerData()`, `JoinLayers()`, etc. are from `SeuratObject`, not `Seurat`
+* **Critical fix**: Plotting functions now handle non-numeric score columns (#issue-xtfrm-error)
+  - Fixed "Error in xtfrm.data.frame(x) : cannot xtfrm data frames"
+  - All plotting functions now convert score columns to numeric matrix before operations
+  - Handles character/factor score columns automatically
+  - Affects: `PlotScPredScoresDistribution()`, `PlotScPredUMAP()`, `PlotScPredUMAPOverlay()`, `PlotScPredUMAPIndividual()`, `PlotScPredUMAP2()`
 * **Workaround**: Added comprehensive scPred compatibility layer:
   - Creates v4-style assays for classification
   - Monkey-patches `GetAssayData()` to convert scPred's old calling convention to Seurat v5 syntax

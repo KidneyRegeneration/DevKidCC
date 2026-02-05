@@ -45,9 +45,13 @@ PlotScPredScoresDistribution <- function(seurat,
   # Extract scores and reshape to long format
   score_data <- df[, score_cols, drop = FALSE]
 
+  # Ensure score columns are numeric - convert to matrix for apply operations
+  score_matrix <- as.matrix(score_data[, score_cols])
+  mode(score_matrix) <- "numeric"  # Ensure numeric mode
+
   # Calculate max score and highest type for each cell
-  score_data$Max_Value <- apply(score_data[, score_cols], 1, max, na.rm = TRUE)
-  score_data$Highest_Type <- score_cols[apply(score_data[, score_cols], 1, which.max)]
+  score_data$Max_Value <- apply(score_matrix, 1, max, na.rm = TRUE)
+  score_data$Highest_Type <- score_cols[apply(score_matrix, 1, which.max)]
   score_data$Highest_Type <- gsub("scpred_", "", score_data$Highest_Type)
 
   # Add split_by variable if specified
@@ -187,9 +191,13 @@ PlotScPredUMAP <- function(seurat,
   # Combine UMAP and scores
   plot_data <- cbind(umap_coords, df[, score_cols, drop = FALSE])
 
+  # Ensure score columns are numeric - convert to matrix for apply operations
+  score_matrix <- as.matrix(plot_data[, score_cols])
+  mode(score_matrix) <- "numeric"  # Ensure numeric mode
+
   # Calculate max score and highest type
-  plot_data$Max_Value <- apply(plot_data[, score_cols], 1, max, na.rm = TRUE)
-  plot_data$Highest_Type <- score_cols[apply(plot_data[, score_cols], 1, which.max)]
+  plot_data$Max_Value <- apply(score_matrix, 1, max, na.rm = TRUE)
+  plot_data$Highest_Type <- score_cols[apply(score_matrix, 1, which.max)]
   plot_data$Highest_Type <- gsub("scpred_", "", plot_data$Highest_Type)
 
   # Reshape to long format for faceting
@@ -384,9 +392,13 @@ PlotScPredUMAPOverlay <- function(seurat,
   # Combine UMAP and scores
   plot_data <- cbind(umap_coords, df[, score_cols, drop = FALSE])
 
+  # Ensure score columns are numeric - convert to matrix for apply operations
+  score_matrix <- as.matrix(plot_data[, score_cols])
+  mode(score_matrix) <- "numeric"  # Ensure numeric mode
+
   # Calculate max score and highest type for each cell
-  plot_data$Max_Score <- apply(plot_data[, score_cols], 1, max, na.rm = TRUE)
-  plot_data$Predicted_Type <- score_cols[apply(plot_data[, score_cols], 1, which.max)]
+  plot_data$Max_Score <- apply(score_matrix, 1, max, na.rm = TRUE)
+  plot_data$Predicted_Type <- score_cols[apply(score_matrix, 1, which.max)]
   plot_data$Predicted_Type <- gsub("scpred_", "", plot_data$Predicted_Type)
 
   # Create color mapping
@@ -449,50 +461,55 @@ PlotScPredUMAP2 <- function(seurat,
   if (!requireNamespace("ggplot2", quietly = TRUE)) stop("Package 'ggplot2' required")
   if (!requireNamespace("ggnewscale", quietly = TRUE)) stop("Package 'ggnewscale' required")
 
-  # 1. Coordinate Extraction
+  # 1. Coordinate & Data Extraction
   umap_coords <- as.data.frame(Seurat::Embeddings(seurat, reduction = reduction))
   colnames(umap_coords) <- c("UMAP_1", "UMAP_2")
   
-  # 2. Metadata Extraction
   df <- seurat[[]]
-  plot_data <- cbind(umap_coords, df[, score_cols, drop = FALSE])
   
-  # Determine which cell type has the max score for each cell
-  # We use the exact column names from score_cols to avoid matching errors
-  plot_data$Highest_Type <- score_cols[max.col(plot_data[, score_cols], ties.method = "first")]
+  # Ensure we only use columns that actually exist
+  score_cols <- score_cols[score_cols %in% colnames(df)]
+  plot_data <- cbind(umap_coords, df[, score_cols, drop = FALSE])
 
-  # Initialize plot with a background layer of all cells in light grey
-  # This ensures the plot isn't "empty" and provides context
+  # Ensure score columns are numeric - convert to matrix
+  score_matrix <- as.matrix(plot_data[, score_cols])
+  mode(score_matrix) <- "numeric"  # Ensure numeric mode
+
+  # Handle NAs immediately
+  score_matrix[is.na(score_matrix)] <- 0
+  plot_data[, score_cols] <- score_matrix
+
+  # 2. Identify the winner by INDEX (more robust than strings)
+  # This creates a column of numbers (1, 2, 3...) corresponding to the winner
+  plot_data$Winner_Idx <- max.col(score_matrix, ties.method = "first")
+
+  # Initialize Plot
   p <- ggplot() +
     geom_point(data = plot_data, aes(x = UMAP_1, y = UMAP_2), 
-               color = "snow2", size = pt_size, alpha = 0.2) +
+               color = "grey90", size = pt_size, alpha = 0.1) +
     theme_classic() +
-    labs(title = "UMAP Projection by Max scPred Score",
-         x = "UMAP 1", y = "UMAP 2") +
     theme(axis.text = element_blank(), axis.ticks = element_blank())
 
-  # 3. Layer Iteration
+  # 3. Layer Iteration using the Index
   for (i in seq_along(score_cols)) {
     col_name <- score_cols[i]
     display_name <- gsub("scpred_", "", col_name)
-    target_color <- colors[i]
     
-    # Filter: Only cells where this specific col_name is the highest
-    layer_data <- plot_data[plot_data$Highest_Type == col_name, ]
+    # Filter using the numeric index created in step 2
+    layer_data <- plot_data[plot_data$Winner_Idx == i, ]
     
-    # Debug check: print if a layer is empty
-    if(nrow(layer_data) == 0) next 
-
-    p <- p +
-      ggnewscale::new_scale_color() + 
-      geom_point(data = layer_data, 
-                 aes(x = UMAP_1, y = UMAP_2, color = .data[[col_name]]),
-                 size = pt_size, 
-                 alpha = alpha) +
-      scale_color_gradient(low = low_color, 
-                           high = target_color, 
-                           name = display_name,
-                           limits = c(0, 1))
+    if(nrow(layer_data) > 0) {
+      p <- p +
+        ggnewscale::new_scale_color() + 
+        geom_point(data = layer_data, 
+                   aes(x = UMAP_1, y = UMAP_2, color = .data[[col_name]]),
+                   size = pt_size, 
+                   alpha = alpha) +
+        scale_color_gradient(low = low_color, 
+                             high = colors[i], 
+                             name = display_name,
+                             limits = c(0, 1))
+    }
   }
 
   return(p)
