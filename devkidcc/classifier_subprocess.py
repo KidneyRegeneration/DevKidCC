@@ -133,7 +133,11 @@ class DevKidCCClassifier:
         if self.verbose:
             print("  [OK] All R packages found")
 
-    def classify(self, adata: ad.AnnData, copy: bool = True) -> ad.AnnData:
+    def classify(self,
+                 adata: ad.AnnData,
+                 threshold: float = 0.7,
+                 max_iter: int = 1,
+                 copy: bool = True) -> ad.AnnData:
         """
         Classify kidney cells using DevKidCC.
 
@@ -145,6 +149,13 @@ class DevKidCCClassifier:
         ----------
         adata : anndata.AnnData
             Input single-cell RNA-seq data
+        threshold : float, default=0.7
+            Confidence threshold for cell type assignment (0-1).
+            Higher values = stricter classification (fewer cells assigned).
+            Lower values = more lenient (more cells assigned).
+        max_iter : int, default=1
+            Maximum number of iterations for refinement.
+            Usually 1 is sufficient.
         copy : bool, default=True
             Whether to return a copy (recommended)
 
@@ -162,7 +173,15 @@ class DevKidCCClassifier:
         >>>
         >>> adata = sc.read_h5ad("kidney_data.h5ad")
         >>> classifier = DevKidCCClassifier()
+        >>>
+        >>> # Default parameters
         >>> adata = classifier.classify(adata)
+        >>>
+        >>> # Stricter classification
+        >>> adata = classifier.classify(adata, threshold=0.9)
+        >>>
+        >>> # More lenient classification
+        >>> adata = classifier.classify(adata, threshold=0.5)
         """
         if copy:
             adata = adata.copy()
@@ -171,7 +190,8 @@ class DevKidCCClassifier:
             print("=" * 60)
             print("DevKidCC Classification Pipeline (Subprocess Backend)")
             print("=" * 60)
-            print(f"Input: {adata.n_obs} cells x {adata.n_vars} genes\n")
+            print(f"Input: {adata.n_obs} cells x {adata.n_vars} genes")
+            print(f"Parameters: threshold={threshold}, max_iter={max_iter}\n")
 
         # Create temp directory for files
         temp_dir = tempfile.mkdtemp()
@@ -206,7 +226,8 @@ class DevKidCCClassifier:
                 print("-" * 60)
 
             result = subprocess.run(
-                [self.rscript_path, str(self.r_script), input_csv, output_csv, obs_csv],
+                [self.rscript_path, str(self.r_script), input_csv, output_csv, obs_csv,
+                 str(threshold), str(max_iter)],
                 capture_output=True,
                 text=True,
                 timeout=3600  # 1 hour timeout
@@ -306,6 +327,8 @@ class DevKidCCClassifier:
 
 
 def classify_kidney_cells(adata: ad.AnnData,
+                         threshold: float = 0.7,
+                         max_iter: int = 1,
                          copy: bool = True,
                          verbose: bool = True,
                          rscript_path: Optional[str] = None) -> ad.AnnData:
@@ -319,6 +342,10 @@ def classify_kidney_cells(adata: ad.AnnData,
     ----------
     adata : anndata.AnnData
         Single-cell RNA-seq data (AnnData format)
+    threshold : float, default=0.7
+        Confidence threshold for cell type assignment (0-1)
+    max_iter : int, default=1
+        Maximum number of iterations for refinement
     copy : bool, default=True
         Whether to return a copy of the data
     verbose : bool, default=True
@@ -339,11 +366,14 @@ def classify_kidney_cells(adata: ad.AnnData,
     >>> # Load your data
     >>> adata = sc.read_h5ad("kidney_organoid.h5ad")
     >>>
-    >>> # Classify (one line!)
+    >>> # Classify with defaults
     >>> adata = classify_kidney_cells(adata)
+    >>>
+    >>> # Stricter classification
+    >>> adata = classify_kidney_cells(adata, threshold=0.9)
     >>>
     >>> # View results
     >>> print(adata.obs['DKCC'].value_counts())
     """
     classifier = DevKidCCClassifier(verbose=verbose, rscript_path=rscript_path)
-    return classifier.classify(adata, copy=copy)
+    return classifier.classify(adata, threshold=threshold, max_iter=max_iter, copy=copy)

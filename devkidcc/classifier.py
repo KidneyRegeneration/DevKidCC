@@ -245,7 +245,7 @@ class DevKidCCClassifier:
         
         return adata
     
-    def classify(self, adata: ad.AnnData, copy: bool = True) -> ad.AnnData:
+    def classify(self, adata: ad.AnnData, copy: bool = True, threshold: float = 0.7, max_iter: int = 1) -> ad.AnnData:
         """
         Classify kidney cells using DevKidCC.
         

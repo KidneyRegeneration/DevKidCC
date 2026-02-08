@@ -2,18 +2,22 @@
 #' Standalone R script to run DevKidCC classification
 #' Called by Python wrapper via subprocess
 #'
-#' Usage: Rscript run_dkcc.R <input.csv> <output.csv> <input.obs.csv>
+#' Usage: Rscript run_dkcc.R <input.csv> <output.csv> <input.obs.csv> [threshold] [max_iter]
 
 # Parse command line arguments
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) != 3) {
-  stop("Usage: Rscript run_dkcc.R <input.csv> <output.csv> <input.obs.csv>")
+if (length(args) < 3 || length(args) > 5) {
+  stop("Usage: Rscript run_dkcc.R <input.csv> <output.csv> <input.obs.csv> [threshold] [max_iter]")
 }
 
 input_csv <- args[1]
 output_csv <- args[2]
 obs_csv <- args[3]
+
+# Optional parameters with defaults
+threshold <- ifelse(length(args) >= 4, as.numeric(args[4]), 0.7)
+max_iter <- ifelse(length(args) >= 5, as.integer(args[5]), 1)
 
 # Validate input files exist
 if (!file.exists(input_csv)) {
@@ -61,12 +65,15 @@ cat("  [OK] Normalization complete\n\n")
 
 # Run DKCC classification
 cat("Running DKCC classification...\n")
+cat("  Parameters:\n")
+cat("    - threshold:", threshold, "\n")
+cat("    - max.iter:", max_iter, "\n")
 cat("This may take several minutes...\n\n")
 
 start_time <- Sys.time()
 
 tryCatch({
-  seurat_obj <- DKCC(seurat_obj, threshold = 0.7, max.iter = 1)
+  seurat_obj <- DKCC(seurat_obj, threshold = threshold, max.iter = max_iter)
 
   end_time <- Sys.time()
   elapsed <- difftime(end_time, start_time, units = "secs")
