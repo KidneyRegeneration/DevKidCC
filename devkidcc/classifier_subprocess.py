@@ -113,7 +113,8 @@ class DevKidCCClassifier:
                     [self.rscript_path, '-e', check_code],
                     capture_output=True,
                     text=True,
-                    timeout=30
+                    timeout=120  # Increased to handle renv dependency discovery (~40s on Windows)
+                    # Note: First-time package checks may take longer due to R package loading
                 )
 
                 if result.returncode != 0:

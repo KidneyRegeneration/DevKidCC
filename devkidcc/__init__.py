@@ -45,7 +45,7 @@ Wilson et al., 2022, Genome Medicine
 https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-022-01023-z
 """
 
-__version__ = "0.1.0"
+__version__ = "0.5.0"
 __author__ = "Sean Wilson"
 __email__ = "sean.wilson@mcri.edu.au"
 

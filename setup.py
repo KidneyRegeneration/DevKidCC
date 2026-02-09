@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="devkidcc",
-    version="0.1.0",
+    version="0.5.0",
     author="Sean Wilson",
     author_email="sean.wilson@mcri.edu.au",
     description="Python wrapper for DevKidCC: Developing Kidney Cell Classifier",
