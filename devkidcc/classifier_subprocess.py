@@ -103,7 +103,7 @@ class DevKidCCClassifier:
         if self.verbose:
             print("\n  Checking R package dependencies...")
 
-        required_packages = ['Seurat', 'SeuratDisk', 'DevKidCC']
+        required_packages = ['Seurat', 'DevKidCC']
 
         for pkg in required_packages:
             check_code = f'if (!requireNamespace("{pkg}", quietly = TRUE)) quit(status = 1)'
