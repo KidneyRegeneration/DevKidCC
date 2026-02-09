@@ -13,6 +13,10 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/KidneyRegeneration/DevKidCC-python",
     packages=find_packages(),
+    package_data={
+        "devkidcc": ["run_dkcc.R"],
+    },
+    include_package_data=True,
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Science/Research",
