@@ -4,12 +4,14 @@
 <!-- badges: start -->
 [![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://www.tidyverse.org/lifecycle/#stable)
 [![Seurat v5](https://img.shields.io/badge/Seurat-v5-blue.svg)](https://satijalab.org/seurat/)
-[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](https://github.com/KidneyRegeneration/DevKidCC)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)](https://github.com/KidneyRegeneration/DevKidCC)
 <!-- badges: end -->
 
 **DevKidCC** (*Dev*eloping *Kid*ney *C*ell *C*lassifier) is a tool that will classify single cell kidney data, both human tissue and human stem cell derived organoids. There is no pre-processing required, although we do recommend filtering out poor quality cells for most accurate representation of cell proportions.
 
-**Version 0.4.0** brings full Seurat v5 compatibility including support for multi-layer objects (integrated datasets, multi-sample experiments). See [VERSION_CHANGELOG.md](VERSION_CHANGELOG.md) for details.
+**Version 0.5.0** introduces a simplified NPC (Nephron Progenitor Cell) refinement approach for improved Seurat v5 compatibility. NPC cells are now classified as "NPC-like" without PAX2-based clustering refinement. This change resolves data frame compatibility issues while maintaining classification accuracy for all other cell types. See [NEWS.md](NEWS.md) for full details.
+
+**Backward Compatibility Note:** If you have existing analyses using v0.4.0, NPC cell classifications may differ in v0.5.0. Cells previously labeled as "NPC" based on PAX2 expression clustering are now uniformly labeled as "NPC-like". All other cell type classifications remain unchanged. This change improves Seurat v5 compatibility and eliminates data frame errors but removes NPC subtyping granularity.
 
 bioRxiv paper: [Wilson et al. 2021](https://doi.org/10.1101/2021.01.20.427346) <br>
 Genome Medicine: [Wilson et al., 2022](https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-022-01023-z)

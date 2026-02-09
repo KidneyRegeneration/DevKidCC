@@ -188,38 +188,16 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
   seurat[[]] <- left_join(md %>% rownames_to_column("cell") %>% select(cell),
                           t1[[]] %>% rownames_to_column("cell"), by = "cell") %>% column_to_rownames("cell")
 
-  # NPC refinement
+  # NPC refinement - SIMPLIFIED to avoid GeneSummary compatibility issues
+  # All NPC cells are labeled as NPC-like
   npc_count <- sum(seurat$LineageID == "NPC", na.rm = TRUE)
 
-  if (npc_count > 2) {
-    message("Refining NPC classification (", npc_count, " NPC cells)...")
-    npcs <- seurat[, which(seurat$LineageID == "NPC")]
-    DefaultAssay(npcs) <- "RNA"
-    npcs <- npcs %>% NormalizeData() %>% FindVariableFeatures() %>% ScaleData()
-    npcs$RNA_snn_res.0.5 <- 0
-
-    if (ncol(npcs) > 50) {
-      npcs <- npcs %>%
-        RunPCA(npcs = 20) %>% RunUMAP(dims = 1:20) %>% FindNeighbors() %>% FindClusters(resolution = 0.5)
-    }
-
-    npcs$Identity <- npcs$orig.ident
-    npcs$orig.ident <- "all"
-    markers <- DevKidCC::GeneSummary(npcs, identity = "orig.ident", split.by = "RNA_snn_res.0.5", features = c("PAX2"))
-    pax2null <- (markers %>% filter(pct.exp < 33))$Component
-
-    if (length(pax2null) > 0) {
-      names <- colnames(npcs[, npcs$RNA_snn_res.0.5 %in% pax2null])
-      seurat[[]] <- within(seurat[[]], LineageID[LineageID %in% c('NPC') & rownames(seurat[[]]) %in% names] <- 'NPC-like')
-      seurat[[]] <- within(seurat[[]], DKCC[DKCC %in% c('NPC') & rownames(seurat[[]]) %in% names] <- 'NPC-like')
-    } else {
-      seurat[[]] <- within(seurat[[]], DKCC[DKCC %in% c('NPC')] <- 'NPC-like')
-    }
-
-    seurat@misc$NPC.seu <- npcs
-  } else if (npc_count > 0) {
-    message("Too few NPC cells (", npc_count, ") for refinement, labeling as NPC-like")
-    seurat[[]] <- within(seurat[[]], DKCC[DKCC %in% c('NPC')] <- 'NPC-like')
+  if (npc_count > 0) {
+    message("Skipping NPC refinement (GeneSummary disabled), marking ", npc_count, " NPC cells as NPC-like")
+    seurat[[]] <- within(seurat[[]], {
+      LineageID[LineageID %in% c('NPC')] <- 'NPC-like'
+      DKCC[DKCC %in% c('NPC')] <- 'NPC-like'
+    })
   } else {
     message("No NPC cells found, skipping NPC refinement")
   }

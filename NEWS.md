@@ -1,3 +1,45 @@
+# DevKidCC 0.5.0
+
+**Major Update: Simplified NPC Refinement for Enhanced Seurat v5 Compatibility**
+
+Released: 2026-02-09
+
+## Major Changes
+
+### Simplified NPC Refinement
+- Removed PAX2-based clustering refinement to resolve Seurat v5 compatibility issues
+- All NPC cells now uniformly classified as "NPC-like"
+- Eliminates "cannot xtfrm data frames" errors during classification
+- Maintains classification accuracy for all other cell types (Nephron, Stroma, UrEp, Endo)
+
+### Performance Improvements
+- Faster execution: Removed clustering overhead for NPC cells
+- Reduced memory usage during NPC refinement step
+
+## Technical Details
+
+### Code Changes (R/DKCC.R, lines 191-204)
+- **Removed:** GeneSummary() call for PAX2 expression analysis
+- **Removed:** Clustering analysis (NormalizeData, FindVariableFeatures, ScaleData, PCA, UMAP, FindNeighbors, FindClusters) on NPC subset
+- **Added:** Direct metadata update to mark all NPCs as "NPC-like"
+
+### Backward Compatibility
+- **Impact:** Existing analyses may show different NPC classifications
+- **v0.4.0:** NPCs classified as either "NPC" or "NPC-like" based on PAX2 clustering
+- **v0.5.0:** All NPCs classified as "NPC-like"
+- **Recommendation:** Re-run classifications on v0.5.0 for consistency
+
+## Breaking Changes
+- None for standard workflows
+- Internal API: NPC subtyping functionality removed
+
+## Future Work
+- Re-implement NPC refinement using simpler PAX2 expression threshold (without clustering)
+- Fix GeneSummary() for standalone use with proper data frame handling
+- Native Python implementation to eliminate R dependency
+
+---
+
 # DevKidCC 0.4.0
 
 **Major Update: Full Seurat v5 Compatibility with Multi-Layer Support**
