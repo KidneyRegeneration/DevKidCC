@@ -87,13 +87,14 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
   colnames(seurat[[]]) <- gsub("Endothelial", "Endo", colnames(seurat[[]]))
   seurat$LineageID <- seurat$scpred_prediction
   seurat$LineageID_max <- seurat$scpred_max
+  fill_unassigned_by_knn_seurat(seurat, "LineageID", threshold = 0.5, k=15)
 
-  dkcc <- seurat[[]] %>% rownames_to_column("cell") %>% filter(LineageID %in% c("unassigned", "NPC", "Endo")) %>% transmute(cell = cell, dkcc = LineageID)
+  dkcc <- seurat[[]] %>% rownames_to_column("cell") %>% filter(LineageID_smooth %in% c("unassigned", "NPC", "Endo")) %>% transmute(cell = cell, dkcc = LineageID)
 
-  t1 <- seurat[, seurat$LineageID %in% c("unassigned", "NPC", "Endo")]
+  t1 <- seurat[, seurat$LineageID_smooth %in% c("unassigned", "NPC", "Endo")]
 
   # Step 2: Nephron classification
-  if (nrow(seurat[[]] %>% filter(LineageID == "Nephron")) > 2) {
+  if (nrow(seurat[[]] %>% filter(LineageID_smooth == "Nephron")) > 2) {
     message("Running nephron classification...")
     nephronid <- scPred::scPredict(seurat[, seurat$LineageID == "Nephron"], reference = model2.nephron,
                                     threshold = 0.0, max.iter.harmony = max.iter)
@@ -204,3 +205,90 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
 
   return(seurat)
 }
+## KNN smoothing function to classify false negatives. Requires dimensional reduction, UMAP works best in testing.
+fill_unassigned_by_knn_seurat <- function(
+    obj,
+    identity_col,
+    new_col = paste0(identity_col, "_smooth"),
+    reduction = "umap",
+    k = 15,
+    threshold = 0.7,
+    max_iter = 5,
+    nn_package = c("RANN", "FNN"),
+    verbose = TRUE
+) {
+  nn_package <- match.arg(nn_package)
+  
+  # --- checks ---
+  if (!inherits(obj, "Seurat")) stop("obj must be a Seurat object.")
+  if (!identity_col %in% colnames(obj@meta.data)) {
+    stop(paste("Metadata column", identity_col, "not found."))
+  }
+  if (!reduction %in% Reductions(obj)) {
+    stop(paste("Reduction", reduction, "not found in the object."))
+  }
+  
+  # --- extract embeddings + metadata ---
+  coords <- Embeddings(obj, reduction)
+  labels <- as.character(obj[[identity_col]][,1])
+  
+  # convert to matrix if needed
+  coords <- as.matrix(coords)
+  
+  # --- compute neighbors (includes self) ---
+  if (nn_package == "RANN") {
+    nn <- RANN::nn2(coords, coords, k = k)
+    idx <- nn$nn.idx
+  } else {
+    nn <- FNN::get.knnx(coords, coords, k = k)
+    idx <- nn$nn.index
+  }
+  
+  if (verbose)
+    message(sprintf("Starting KNN fill for 'unassigned' (threshold %.0f%%)", threshold * 100))
+  
+  # --- iterative fill ---
+  current <- labels
+  
+  for (iter in seq_len(max_iter)) {
+    unassigned <- which(current == "unassigned")
+    if (length(unassigned) == 0) {
+      if (verbose) message("Done: no unassigned left.")
+      break
+    }
+    
+    updated <- current
+    filled <- 0
+    
+    for (cell in unassigned) {
+      neighbor_labels <- current[idx[cell, ]]
+      tab <- table(neighbor_labels)
+      tab <- tab[names(tab) != "unassigned"]   # remove unassigned candidates
+      if (length(tab) == 0) next
+      
+      best_label <- names(tab)[which.max(tab)]
+      ratio <- max(tab) / k
+      
+      if (ratio >= threshold) {
+        updated[cell] <- best_label
+        filled <- filled + 1
+      }
+    }
+    
+    current <- updated
+    if (verbose)
+      message(sprintf("Iteration %d: filled %d cells", iter, filled))
+    
+    if (filled == 0) {
+      if (verbose) message("Reached stability — stopping.")
+      break
+    }
+  }
+  
+  # --- write the updated labels back into Seurat ---
+  obj[[new_col]] <- current
+  
+  return(obj)
+}
+
+
