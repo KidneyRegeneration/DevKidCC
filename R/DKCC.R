@@ -212,7 +212,7 @@ fill_unassigned_by_knn_seurat <- function(
     reduction = "umap",
     k = 15,
     threshold = 0.7,
-    max_iter = 5,
+    max_iter = 10,
     nn_package = c("RANN", "FNN"),
     verbose = TRUE
 ) {
