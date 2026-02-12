@@ -89,14 +89,14 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
   seurat$LineageID_max <- seurat$scpred_max
   fill_unassigned_by_knn_seurat(seurat, "LineageID", threshold = 0.5, k=15)
 
-  dkcc <- seurat[[]] %>% rownames_to_column("cell") %>% filter(LineageID_smooth %in% c("unassigned", "NPC", "Endo")) %>% transmute(cell = cell, dkcc = LineageID)
+  dkcc <- seurat[[]] %>% rownames_to_column("cell") %>% filter(LineageID_smooth %in% c("unassigned", "NPC", "Endo")) %>% transmute(cell = cell, dkcc = LineageID_smooth)
 
   t1 <- seurat[, seurat$LineageID_smooth %in% c("unassigned", "NPC", "Endo")]
 
   # Step 2: Nephron classification
   if (nrow(seurat[[]] %>% filter(LineageID_smooth == "Nephron")) > 2) {
     message("Running nephron classification...")
-    nephronid <- scPred::scPredict(seurat[, seurat$LineageID == "Nephron"], reference = model2.nephron,
+    nephronid <- scPred::scPredict(seurat[, seurat$LineageID_smooth == "Nephron"], reference = model2.nephron,
                                     threshold = 0.0, max.iter.harmony = max.iter)
     nephronid$NephronID <- nephronid$scpred_prediction
 
@@ -146,9 +146,9 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
   }
 
   # Step 3: Stroma classification
-  if (nrow(seurat[[]] %>% filter(LineageID == "Stroma")) > 2) {
+  if (nrow(seurat[[]] %>% filter(LineageID_smooth == "Stroma")) > 2) {
     message("Running stroma classification...")
-    stromaid <- scPred::scPredict(seurat[, seurat$LineageID == "Stroma"], reference = model2.stroma,
+    stromaid <- scPred::scPredict(seurat[, seurat$LineageID_smooth == "Stroma"], reference = model2.stroma,
                                    threshold = 0.0, max.iter.harmony = max.iter)
     stromaid$StromaID <- stromaid$scpred_prediction
 
@@ -158,9 +158,9 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
   }
 
   # Step 4: Ureteric epithelium classification
-  if (nrow(seurat[[]] %>% filter(LineageID == "UrEp")) > 2) {
+  if (nrow(seurat[[]] %>% filter(LineageID_smooth == "UrEp")) > 2) {
     message("Running ureteric epithelium classification...")
-    urepid <- scPred::scPredict(seurat[, seurat$LineageID == "UrEp"], reference = model2.urep,
+    urepid <- scPred::scPredict(seurat[, seurat$LineageID_smooth == "UrEp"], reference = model2.urep,
                                  threshold = 0.0, max.iter.harmony = max.iter)
     urepid$scpred_prediction <- gsub("^Tip", "UTip", urepid$scpred_prediction)
     colnames(urepid[[]]) <- gsub("^Tip", "UTip", colnames(urepid[[]]))
@@ -183,7 +183,7 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
               "EDT", "DT", "LOH", "EPT", "PT", "PEC", "EPod", "Pod", "Nephron_NC")
 
   t1$DKCC <- factor(dkcc$dkcc, levels = levels[levels %in% c(unique(dkcc$dkcc), "NPC-like")])
-  t1$LineageID <- factor(t1$LineageID, levels = c("unassigned", "Endo", "Stroma", "NPC", "NPC-like", "Nephron", "UrEp"))
+  t1$LineageID_smooth <- factor(t1$LineageID_smooth, levels = c("unassigned", "Endo", "Stroma", "NPC", "NPC-like", "Nephron", "UrEp"))
 
   # Transfer results back to original seurat object
   seurat[[]] <- left_join(md %>% rownames_to_column("cell") %>% select(cell),
@@ -191,12 +191,12 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
 
   # NPC refinement - SIMPLIFIED to avoid GeneSummary compatibility issues
   # All NPC cells are labeled as NPC-like
-  npc_count <- sum(seurat$LineageID == "NPC", na.rm = TRUE)
+  npc_count <- sum(seurat$LineageID_smooth == "NPC", na.rm = TRUE)
 
   if (npc_count > 0) {
     message("Skipping NPC refinement (GeneSummary disabled), marking ", npc_count, " NPC cells as NPC-like")
     seurat[[]] <- within(seurat[[]], {
-      LineageID[LineageID %in% c('NPC')] <- 'NPC-like'
+      LineageID_smooth[LineageID_smooth %in% c('NPC')] <- 'NPC-like'
       DKCC[DKCC %in% c('NPC')] <- 'NPC-like'
     })
   } else {
