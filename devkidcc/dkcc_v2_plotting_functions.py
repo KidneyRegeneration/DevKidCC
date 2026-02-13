@@ -91,29 +91,41 @@ def plot_scpred_umap_py(adata, score_cols, colors, scpred_df=None, split_by=None
     
     norm = Normalize(vmin=0, vmax=1)
     
-    # --- 4. UMAP Plotting (Legend Removed) ---
+    # --- 4. UMAP Plotting ---
+    # Define these layout variables inside the function before the loop
     cbar_x_start, cbar_width, cbar_y_start, cbar_gap = 0.48, 0.015, 0.88, 0.02
     cbar_total_height = 0.8
     cbar_height_unit = cbar_total_height / len(score_cols)
     
     for i, (original_col_name, high_color) in enumerate(zip(score_cols, colors)):
         cell_type_clean = original_col_name.replace('scpred_', '')
-        df_subset = df[df['Highest_Type'] == cell_type_clean]
         
-        if df_subset.empty: continue
+        # 1. Subset the data
+        df_subset = df[df['Highest_Type'] == cell_type_clean].copy()
+        
+        if df_subset.empty: 
+            continue
             
+        # 2. SORT: Ensure the highest scores in this cell type are plotted last (on top)
+        df_subset = df_subset.sort_values(by=original_col_name, ascending=True)
+            
+        # 3. Create colormap and scatter
         cmap = create_custom_cmap(high_color)
         scatter = ax_umap.scatter(
-            df_subset['umap1'], df_subset['umap2'],
+            df_subset['umap1'], 
+            df_subset['umap2'],
             c=df_subset[original_col_name],
-            cmap=cmap, norm=norm, s=1.5, alpha=0.8
-            # label=cell_type_clean  <-- REMOVED TO PREVENT LEGEND
+            cmap=cmap, 
+            norm=norm, 
+            s=1.5, 
+            alpha=0.8
         )
         
-        # Colorbar stack
+        # 4. Colorbar stack (Using the variables defined above)
         cbar_bottom = cbar_y_start - (i + 1) * cbar_height_unit - (i * cbar_gap)
         cax = fig.add_axes([cbar_x_start, cbar_bottom, cbar_width, cbar_height_unit - cbar_gap])
-        fig.colorbar(scatter, cax=cax, orientation='vertical', label=cell_type_clean)
+        fig.colorbar(scatter, cax=cax, orientation='vertical')
+        cax.set_ylabel(cell_type_clean, rotation=0, ha='left', va='center', fontsize=10)
         # Adjust layout to make sure the new legend isn't cut off
     plt.subplots_adjust(right=0.85)
 
