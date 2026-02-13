@@ -44,7 +44,11 @@ DevKidCC operates on single cell data as a Seurat object. The simplest workflow 
 ``` r
 library(DevKidCC)
 # read in seurat object
-organoid <- DKCC(organoid)  # use dataset 'organoid' included in package
+# the update to seurat v5 now requires you to perform normalisation prior to running the classifier
+# dataset 'organoid' included in package for demo
+organoid <- Seurat::RunNormalize(organoid)
+# then you can run the function as before
+organoid <- DKCC(organoid)  # dataset 'organoid' included in package
 ```
 This will cause a number of additional metadata to be added to the object. The first tier is labelled "LineageID" while the complete annotation is under "DKCC"
 
