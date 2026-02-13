@@ -87,7 +87,7 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
   colnames(seurat[[]]) <- gsub("Endothelial", "Endo", colnames(seurat[[]]))
   seurat$LineageID <- seurat$scpred_prediction
   seurat$LineageID_max <- seurat$scpred_max
-  fill_unassigned_by_knn_seurat(seurat, "LineageID", threshold = 0.5, k=15)
+  fill_unassigned_by_knn_seurat(seurat, "LineageID", threshold = 0.4, k=25, max_iter=20)
 
   dkcc <- seurat[[]] %>% rownames_to_column("cell") %>% filter(LineageID %in% c("unassigned", "NPC", "Endo")) %>% transmute(cell = cell, dkcc = LineageID)
 
