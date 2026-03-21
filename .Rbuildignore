@@ -1,5 +1,6 @@
 ^renv$
 ^renv\.lock$
+^\.Rprofile$
 ^DevKidCC\.Rproj$
 ^\.Rproj\.user$
 ^doc$

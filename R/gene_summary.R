@@ -23,9 +23,9 @@ GeneSummary <-function(data,
 ){
   # gene proportion information
   Idents(data) <- identity
-  df <- as.data.frame(table(data[[paste0(identity)]],
-                            data[[paste0(split.by)]]))
-  id <- as.data.frame(table(data[[paste0(identity)]]))
+  df <- as.data.frame(table(data[[paste0(identity), drop = TRUE]],
+                            data[[paste0(split.by), drop = TRUE]]))
+  id <- as.data.frame(table(data[[paste0(identity), drop = TRUE]]))
   colnames(id) <- c("Identity", "CellTotal")
   colnames(df) <- c("Identity", "Component", "Cells")
   df <- left_join(df, id, "Identity")
