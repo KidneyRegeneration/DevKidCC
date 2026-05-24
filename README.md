@@ -360,7 +360,7 @@ MIT License - see [LICENSE](LICENSE) file
 ## Contact
 
 - **Author**: Sean Wilson
-- **Email**: sean.wilson@mcri.edu.au
+- **Email**: sean.wilson@sund.ku.dk
 - **Issues**: https://github.com/KidneyRegeneration/DevKidCC-python/issues
 - **Original R Package**: https://github.com/KidneyRegeneration/DevKidCC
 
