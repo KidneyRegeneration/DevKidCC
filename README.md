@@ -23,6 +23,40 @@ Genome Medicine: [Wilson et al., 2022](https://genomemedicine.biomedcentral.com/
 
 ## Installation
 
+### Option 1 — Docker (no R installation required)
+
+A pre-built container is available from the GitHub Container Registry. This is the easiest way to run DevKidCC if you don't already have R and Seurat set up.
+
+```bash
+docker pull ghcr.io/kidneyregeneration/devkidcc:latest
+
+# Run on a single file (mount your data directory to /data inside the container)
+docker run --rm -v /path/to/your/data:/data \
+    ghcr.io/kidneyregeneration/devkidcc:latest \
+    Rscript /opt/run_dkcc.R \
+        --input  /data/sample.h5ad \
+        --output /data/sample_DKCC.h5ad \
+        --format h5ad
+
+# Batch process all supported files in a directory
+docker run --rm -v /path/to/your/data:/data \
+    ghcr.io/kidneyregeneration/devkidcc:latest \
+    bash /opt/run_dkcc_batch.sh -i /data -o h5ad
+```
+
+Supported input formats: `.h5ad`, `.h5`, `.h5seurat`, `.rds`, `.RData`  
+Supported output formats: `h5ad`, `rds`
+
+A Singularity/Apptainer image can be built from the same container:
+
+```bash
+singularity pull devkidcc.sif docker://ghcr.io/kidneyregeneration/devkidcc:latest
+singularity exec --bind /path/to/data:/data devkidcc.sif \
+    Rscript /opt/run_dkcc.R --input /data/sample.h5ad --output /data/sample_DKCC.h5ad
+```
+
+### Option 2 — R package (devtools)
+
 You can install **DevKidCC** from this repository using devtools: 
 
 ``` r
