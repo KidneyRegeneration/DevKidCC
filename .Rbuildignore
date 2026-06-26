@@ -12,3 +12,8 @@
 ^docs$
 ^pkgdown$
 ^index.md
+^Dockerfile$
+^\.dockerignore$
+^environment\.yml$
+^docker$
+^\.github$

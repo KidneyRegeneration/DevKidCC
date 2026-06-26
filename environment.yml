@@ -1,0 +1,25 @@
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  - python=3.12
+  - r-base=4.4
+  - pip
+  - numpy
+  - pandas
+  - anndata
+  - tqdm
+  - scanpy
+  - rpy2
+  - anndata2ri
+  - scipy
+  - scikit-image
+  - matplotlib
+  - r-seurat
+  - git
+  - r-remotes
+  - r-harmony=1.2.0
+  - r-seurat-disk
+  - r-optparse
+  - r-sceasy
