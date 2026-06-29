@@ -16,4 +16,5 @@
 ^\.dockerignore$
 ^environment\.yml$
 ^docker$
+^run_dkcc\.sh$
 ^\.github$
