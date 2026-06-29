@@ -15,6 +15,9 @@
 #   -m, --mode        local | slurm                          [default: local]
 #                       local  = run immediately with Singularity
 #                       slurm  = submit as a SLURM job using Apptainer
+#   --mounts          Comma-separated host paths to bind into the container
+#                     [default: /group]
+#                     e.g. --mounts /group,/scratch
 #
 #   SLURM options (--mode slurm only):
 #   -p, --partition   Partition name   [default: prod_med]
@@ -40,6 +43,8 @@ FORMAT="h5ad"
 CONTAINER_OPT="remote"
 MODE="local"
 SIF="./dkcc.sif"
+
+MOUNTS="/group"
 
 PARTITION="prod_med"
 MEM="64G"
@@ -73,6 +78,7 @@ while [[ $# -gt 0 ]]; do
         --mem)          MEM="$2";           shift 2 ;;
         --cpus)         CPUS="$2";          shift 2 ;;
         --time)         TIME="$2";          shift 2 ;;
+        --mounts)       MOUNTS="$2";        shift 2 ;;
         --job-name)     JOB_NAME="$2";      shift 2 ;;
         --logs)         LOG_DIR="$2";       shift 2 ;;
         -h|--help)      usage ;;
@@ -173,6 +179,21 @@ fi
 [[ -z "$LOG_DIR" ]] && LOG_DIR="$DATA_DIR"
 
 # ---------------------------------------------------------------------------
+# Build --bind flags from DATA_DIR + MOUNTS
+# ---------------------------------------------------------------------------
+
+build_binds() {
+    local flags="--bind ${DATA_DIR}:/data"
+    IFS=',' read -ra mnt_list <<< "$MOUNTS"
+    for mnt in "${mnt_list[@]}"; do
+        mnt="${mnt## }"   # trim leading spaces
+        mnt="${mnt%% }"   # trim trailing spaces
+        [[ -n "$mnt" ]] && flags="$flags --bind ${mnt}:${mnt}"
+    done
+    echo "$flags"
+}
+
+# ---------------------------------------------------------------------------
 # Local mode — Singularity
 # ---------------------------------------------------------------------------
 
@@ -184,14 +205,20 @@ run_local() {
 
     ensure_sif
     SIF=$(realpath "$SIF")
+    BIND_FLAGS=$(build_binds)
 
     echo "Running DevKidCC locally via Singularity"
     echo "  Input  : $INPUT"
     echo "  Format : $FORMAT"
     echo "  Image  : $SIF"
+    echo "  Mounts : /data (data dir), ${MOUNTS}"
     echo ""
 
-    singularity exec --bind "${DATA_DIR}:/data" "$SIF" bash -c "$INNER_CMD"
+    # R_PROFILE_USER=/dev/null prevents the host .Rprofile (renv) from loading
+    singularity exec \
+        ${BIND_FLAGS} \
+        --env R_PROFILE_USER=/dev/null \
+        "$SIF" bash -c "$INNER_CMD"
 }
 
 # ---------------------------------------------------------------------------
@@ -207,6 +234,7 @@ run_slurm() {
     # Pull the SIF on the login node now so compute nodes don't need internet
     ensure_sif
     SIF=$(realpath "$SIF")
+    BIND_FLAGS=$(build_binds)
 
     local SBATCH_SCRIPT
     SBATCH_SCRIPT=$(mktemp /tmp/dkcc_XXXXXX.sh)
@@ -231,7 +259,10 @@ echo "Input     : ${INPUT}"
 echo "Image     : ${SIF}"
 echo ""
 
-apptainer exec --bind "${DATA_DIR}:/data" "${SIF}" bash -c "${INNER_CMD}"
+apptainer exec \
+    ${BIND_FLAGS} \
+    --env R_PROFILE_USER=/dev/null \
+    "${SIF}" bash -c "${INNER_CMD}"
 
 echo ""
 echo "Job complete: \$(date)"
