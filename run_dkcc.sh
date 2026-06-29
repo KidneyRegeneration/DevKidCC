@@ -214,10 +214,10 @@ run_local() {
     echo "  Mounts : /data (data dir), ${MOUNTS}"
     echo ""
 
-    # R_PROFILE_USER=/dev/null prevents the host .Rprofile (renv) from loading
     singularity exec \
         ${BIND_FLAGS} \
         --env R_PROFILE_USER=/dev/null \
+        --env RETICULATE_PYTHON=/opt/micromamba/envs/devkid/bin/python \
         "$SIF" bash -c "$INNER_CMD"
 }
 
@@ -262,6 +262,7 @@ echo ""
 apptainer exec \
     ${BIND_FLAGS} \
     --env R_PROFILE_USER=/dev/null \
+    --env RETICULATE_PYTHON=/opt/micromamba/envs/devkid/bin/python \
     "${SIF}" bash -c "${INNER_CMD}"
 
 echo ""
