@@ -4,12 +4,14 @@ on:
   push:
     branches:
       - main
+      - containerise
     tags:
       - 'v*.*.*'
 
   pull_request:
     branches:
       - main
+      - containerise
 
   workflow_dispatch:
 
@@ -39,7 +41,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/kidneyregeneration/dkcc
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
