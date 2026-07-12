@@ -3,6 +3,7 @@
 #' @param seurat seurat object
 #' @param threshold minimum value for an identity to be assigned within the model call, default is 0.7
 #' @param max.iter Can ask scPred to run this number of integrations, set to 0 be default
+#' @param knn.iter Maximum KNN smoothing iterations for unassigned cell rescue. Set to 0 to disable KNN smoothing (useful for benchmarking). Default is 20.
 #'
 #' @return seurat object with additional metadata columns
 #' @export
@@ -11,8 +12,9 @@
 #'
 #' @examples
 #' organoid <- DKCC(organoid)
+#' organoid_no_knn <- DKCC(organoid, knn.iter = 0)
 
-DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
+DKCC <- function(seurat, threshold = 0.7, max.iter = 1, knn.iter = 20) {
 
   if (("dkcc" %in% colnames(seurat[[]])) == FALSE){
     seurat@misc$old.meta <- seurat[[]]
@@ -103,7 +105,23 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1) {
   colnames(seurat[[]]) <- gsub("Endothelial", "Endo", colnames(seurat[[]]))
   seurat$LineageID <- seurat$scpred_prediction
   seurat$LineageID_max <- seurat$scpred_max
-  fill_unassigned_by_knn_seurat(seurat, "LineageID", threshold = 0.4, k=25, max_iter=20)
+
+  # KNN smoothing requires a low-dimensional embedding (UMAP by default).
+  # Compute PCA + UMAP if they are absent and KNN is requested.
+  if (knn.iter > 0 && !"umap" %in% Reductions(seurat)) {
+    message("Computing PCA and UMAP for KNN smoothing...")
+    n_pcs <- min(30, ncol(seurat) - 1)
+    seurat <- suppressWarnings(
+      seurat %>%
+        FindVariableFeatures(nfeatures = 2000, verbose = FALSE) %>%
+        ScaleData(verbose = FALSE) %>%
+        RunPCA(npcs = n_pcs, verbose = FALSE) %>%
+        RunUMAP(dims = 1:n_pcs, verbose = FALSE)
+    )
+    message("  UMAP computed (", n_pcs, " PCs)")
+  }
+
+  seurat <- fill_unassigned_by_knn_seurat(seurat, "LineageID", threshold = 0.4, k=25, max_iter=knn.iter)
 
   dkcc <- seurat[[]] %>% rownames_to_column("cell") %>% filter(LineageID %in% c("unassigned", "NPC", "Endo")) %>% transmute(cell = cell, dkcc = LineageID)
 
