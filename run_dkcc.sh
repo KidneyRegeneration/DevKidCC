@@ -33,6 +33,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
@@ -42,7 +44,7 @@ REMOTE_URI="ghcr.io/kidneyregeneration/dkcc:latest"
 FORMAT="h5ad"
 CONTAINER_OPT="remote"
 MODE="local"
-SIF="./dkcc.sif"
+SIF="${SCRIPT_DIR}/dkcc.sif"
 
 MOUNTS="/group"
 
@@ -184,11 +186,21 @@ fi
 
 build_binds() {
     local flags="--bind ${DATA_DIR}:/data"
+
+    # No script bind-mounts here: the h5ad-reading, Assay5, orig.ident/PAX2 and
+    # batch-loop fixes are baked into the image, so the SIF is self-contained.
+
     IFS=',' read -ra mnt_list <<< "$MOUNTS"
     for mnt in "${mnt_list[@]}"; do
         mnt="${mnt## }"   # trim leading spaces
         mnt="${mnt%% }"   # trim trailing spaces
-        [[ -n "$mnt" ]] && flags="$flags --bind ${mnt}:${mnt}"
+        if [[ -z "$mnt" ]]; then
+            continue
+        elif [[ -e "$mnt" ]]; then
+            flags="$flags --bind ${mnt}:${mnt}"
+        else
+            echo "WARNING: skipping --mounts entry '$mnt' (does not exist on this host)" >&2
+        fi
     done
     echo "$flags"
 }
