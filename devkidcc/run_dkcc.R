@@ -69,7 +69,41 @@ cat("  Features:", nrow(seurat_obj), "\n")
 cat("  Assays:", paste(names(seurat_obj@assays), collapse = ", "), "\n\n")
 
 cat("Normalizing data...\n")
-seurat_obj <- NormalizeData(seurat_obj)
+# The Python wrapper sends only the DevKidCC reference genes to keep the CSV (and
+# so R's peak memory) manageable. NormalizeData() would then divide each cell by
+# the sum over *those* genes, which is not the library size the models were fit
+# against -- it shifts every normalised value and every scPred score with it. The
+# wrapper therefore ships the full-matrix totals in this metadata column, and we
+# reproduce LogNormalize by hand from them: log1p(count / total * 10000), which is
+# exactly what NormalizeData() computes, only with the right denominator.
+#
+# Absent (a caller driving this script directly with an unprojected matrix), fall
+# back to stock NormalizeData.
+lib_col <- "dkcc_full_library_size"
+if (lib_col %in% colnames(seurat_obj[[]])) {
+  totals <- as.numeric(seurat_obj[[lib_col]][, 1])
+  if (any(!is.finite(totals)) || any(totals <= 0)) {
+    stop("Column '", lib_col, "' contains non-positive or non-finite library sizes.")
+  }
+  cat("  Using full-matrix library sizes from '", lib_col, "'\n", sep = "")
+  cts <- SeuratObject::LayerData(seurat_obj, layer = "counts")
+  # Column scaling via a diagonal matrix rather than `cts / totals`: sparse
+  # arithmetic against a plain vector recycles column-major over every entry,
+  # including the structural zeros, which densifies the matrix.
+  norm <- cts %*% Matrix::Diagonal(x = 1e4 / totals)
+  dimnames(norm) <- dimnames(cts)
+  if (methods::is(norm, "sparseMatrix")) {
+    norm@x <- log1p(norm@x)          # log1p(0) == 0, so the zeros stay structural
+  } else {
+    norm <- log1p(norm)
+  }
+  seurat_obj <- SeuratObject::SetAssayData(seurat_obj, layer = "data", new.data = norm)
+  rm(cts, norm)
+  invisible(gc())
+} else {
+  cat("  No '", lib_col, "' column; using NormalizeData() column sums\n", sep = "")
+  seurat_obj <- NormalizeData(seurat_obj)
+}
 cat("  [OK] Normalization complete\n\n")
 
 cat("Running DKCC classification...\n")

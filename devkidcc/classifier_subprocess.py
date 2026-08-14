@@ -25,6 +25,15 @@ _CSV_GENE_CHUNK = 500
 # R-side default; 0 disables smoothing entirely.
 _DEFAULT_KNN_ITER = 20
 
+# Cells per batch when summing library sizes from a dense matrix.
+_LIB_SIZE_ROW_CHUNK = 5000
+
+# Reserved obs column carrying each cell's total counts over the *full* input
+# matrix. run_dkcc.R normalises with these instead of the projected column sums,
+# so the reference-gene projection cannot move the scPred scores. Named to be
+# unmistakably ours; it is stripped from the returned object.
+_LIB_SIZE_COL = "dkcc_full_library_size"
+
 
 def reference_gene_path() -> Path:
     """
@@ -291,8 +300,16 @@ class DevKidCCClassifier:
 
             self._write_counts_csv(adata, keep_idx, input_csv)
 
-            # Save obs metadata
-            adata.obs.to_csv(obs_csv)
+            # Seurat's LogNormalize divides each cell by its library size, and
+            # that library size is summed over whatever genes are in the object.
+            # Projecting onto the reference genes above therefore shifts every
+            # normalised value, and with it every scPred score -- silently, and
+            # by enough to matter (Howden 2019: LineageID kappa 0.66 against the
+            # unprojected labels). Send the totals computed over the *full*
+            # matrix so R can normalise as if no projection had happened.
+            obs_out = adata.obs.copy()
+            obs_out[_LIB_SIZE_COL] = self._library_sizes(adata)
+            obs_out.to_csv(obs_csv)
 
             if self.verbose:
                 print("  [OK] Data saved\n")
@@ -342,8 +359,12 @@ class DevKidCCClassifier:
                 # Try to align by cell names
                 result_metadata = result_metadata.loc[adata.obs.index]
 
-            # Copy all columns from results to adata.obs
+            # Copy all columns from results to adata.obs. The library-size column
+            # is ours, not a result: it went over to R with the metadata and comes
+            # back on it, so drop it rather than leaving it on the caller's object.
             for col in result_metadata.columns:
+                if col == _LIB_SIZE_COL:
+                    continue
                 adata.obs[col] = result_metadata[col]
 
             if self.verbose:
@@ -419,6 +440,21 @@ class DevKidCCClassifier:
 
         del X_csc
         gc.collect()
+
+    @staticmethod
+    def _library_sizes(adata: ad.AnnData) -> np.ndarray:
+        """
+        Per-cell total counts over every gene in `adata`, summed in row blocks so
+        a dense input is never copied whole.
+        """
+        if issparse(adata.X):
+            return np.asarray(adata.X.sum(axis=1)).ravel()
+
+        totals = np.empty(adata.n_obs, dtype=np.float64)
+        for start in range(0, adata.n_obs, _LIB_SIZE_ROW_CHUNK):
+            stop = min(start + _LIB_SIZE_ROW_CHUNK, adata.n_obs)
+            totals[start:stop] = np.asarray(adata.X[start:stop]).sum(axis=1)
+        return totals
 
     def get_marker_genes(self, cell_type: str) -> pd.DataFrame:
         """

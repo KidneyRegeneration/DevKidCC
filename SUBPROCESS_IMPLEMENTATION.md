@@ -100,7 +100,9 @@ handoff works in both directions.
 2. **Memory** - the CSV is the binding constraint on large inputs; R loads it
    whole before building a Seurat object. Mitigated by projecting onto the
    DevKidCC reference genes and streaming the file out in gene batches rather
-   than through a dense pandas DataFrame.
+   than through a dense pandas DataFrame. The projection carries full-matrix
+   library sizes across in the metadata (`dkcc_full_library_size`) so that
+   `LogNormalize` divides by the same denominator it would have without it.
 3. **No real-time R access** - Can't call arbitrary R functions on the fly
 
 ## Future Plans

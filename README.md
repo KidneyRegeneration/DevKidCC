@@ -121,6 +121,13 @@ and a ~25 GB Seurat object to roughly ~3 GB and ~6 GB. The returned AnnData
 still carries every gene you passed in; the projection applies only to what
 crosses the process boundary.
 
+Per-cell library sizes are computed over the **full** matrix and sent across
+with the metadata, because Seurat's `LogNormalize` otherwise divides by the sum
+over the projected genes alone — which moves every normalised value, and every
+scPred score with it. On Howden 2019 that was the difference between LineageID
+κ 0.66 and κ 0.9989 against unprojected labels. So the projection is a memory
+optimisation and nothing more, which is the only thing it should be.
+
 The list ships as `devkidcc/data/reference_genes.txt` (the union of feature
 loadings across all seven scPred models). Override it with `$DEVKIDCC_REF_GENES`,
 or regenerate it with `Rscript scripts/export_reference_genes.R`.
