@@ -108,20 +108,27 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1, knn.iter = 20) {
 
   # KNN smoothing requires a low-dimensional embedding (UMAP by default).
   # Compute PCA + UMAP if they are absent and KNN is requested.
-  if (knn.iter > 0 && !"umap" %in% Reductions(seurat)) {
-    message("Computing PCA and UMAP for KNN smoothing...")
-    n_pcs <- min(30, ncol(seurat) - 1)
-    seurat <- suppressWarnings(
-      seurat %>%
-        FindVariableFeatures(nfeatures = 2000, verbose = FALSE) %>%
-        ScaleData(verbose = FALSE) %>%
-        RunPCA(npcs = n_pcs, verbose = FALSE) %>%
-        RunUMAP(dims = 1:n_pcs, verbose = FALSE)
-    )
-    message("  UMAP computed (", n_pcs, " PCs)")
+  if (knn.iter > 0) {
+    if (!"umap" %in% Reductions(seurat)) {
+      message("Computing PCA and UMAP for KNN smoothing...")
+      n_pcs <- min(30, ncol(seurat) - 1)
+      seurat <- suppressWarnings(
+        seurat %>%
+          FindVariableFeatures(nfeatures = 2000, verbose = FALSE) %>%
+          ScaleData(verbose = FALSE) %>%
+          RunPCA(npcs = n_pcs, verbose = FALSE) %>%
+          RunUMAP(dims = 1:n_pcs, verbose = FALSE)
+      )
+      message("  UMAP computed (", n_pcs, " PCs)")
+    }
+    seurat <- fill_unassigned_by_knn_seurat(seurat, "LineageID", threshold = 0.4, k=25, max_iter=knn.iter)
+  } else {
+    # knn.iter = 0 is the documented way to disable smoothing for benchmarking.
+    # It cannot go through fill_unassigned_by_knn_seurat(): that function stops
+    # if the umap reduction is absent, which -- since the block above no longer
+    # computes one -- is exactly the case knn.iter = 0 produces.
+    message("KNN smoothing disabled (knn.iter = 0).")
   }
-
-  seurat <- fill_unassigned_by_knn_seurat(seurat, "LineageID", threshold = 0.4, k=25, max_iter=knn.iter)
 
   dkcc <- seurat[[]] %>% rownames_to_column("cell") %>% filter(LineageID %in% c("unassigned", "NPC", "Endo")) %>% transmute(cell = cell, dkcc = LineageID)
 
