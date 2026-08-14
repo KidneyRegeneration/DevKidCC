@@ -37,10 +37,12 @@ ENV PATH=/opt/micromamba/envs/devkid/bin:$PATH
 COPY docker/install.R /tmp/install.R
 RUN Rscript /tmp/install.R
 
-# Install Python wrapper (python-wrapper branch is a separate deliverable)
-RUN git clone -b python-wrapper https://github.com/KidneyRegeneration/DevKidCC /opt/DevKidCC_python
+# Install the Python wrapper, which lives on its own branch of this same repo.
+# Non-editable: an editable install leaves the image depending on /opt/DevKidCC_python
+# staying present and writable, which buys nothing here.
+RUN git clone -b python-wrapper-v0.5.1 https://github.com/KidneyRegeneration/DevKidCC /opt/DevKidCC_python
 WORKDIR /opt/DevKidCC_python
-RUN pip install --no-deps -e .
+RUN pip install --no-deps .
 
 # Install scPred from source
 RUN git clone https://github.com/powellgenomicslab/scPred /opt/scPred

@@ -1,2 +1,2 @@
 Bootstrap: docker
-From: ghcr.io/kidneyregeneration/devkidcc:latest
+From: ghcr.io/kidneyregeneration/dkcc:latest

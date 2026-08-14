@@ -23,3 +23,6 @@ dependencies:
   - r-seurat-disk
   - r-optparse
   - r-sceasy
+  # sceasy reads h5ad through Python's anndata via reticulate; pin it explicitly
+  # rather than relying on it arriving as an r-sceasy dependency.
+  - r-reticulate
