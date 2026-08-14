@@ -37,7 +37,9 @@ Requirements
 ------------
 - Python >= 3.8
 - R >= 4.0
-- R packages: Seurat, SeuratDisk, DevKidCC (auto-installed)
+- R packages: Seurat (>= 5), scPred, DevKidCC (>= 0.5.1, for DKCC()'s
+  knn.iter parameter). These are not auto-installed; the wrapper checks for
+  them at construction and tells you what is missing.
 
 References
 ----------
@@ -45,11 +47,16 @@ Wilson et al., 2022, Genome Medicine
 https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-022-01023-z
 """
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 __author__ = "Sean Wilson"
 __email__ = "sean.wilson@mcri.edu.au"
 
-from .classifier_subprocess import DevKidCCClassifier, classify_kidney_cells
+from .classifier_subprocess import (
+    DevKidCCClassifier,
+    classify_kidney_cells,
+    load_reference_genes,
+    reference_gene_path,
+)
 from .dkcc_v2_plotting_functions import (
     plot_scpred_scores_distribution,
     plot_scpred_umap_py,
@@ -59,6 +66,8 @@ from .dkcc_v2_plotting_functions import (
 __all__ = [
     "DevKidCCClassifier",
     "classify_kidney_cells",
+    "load_reference_genes",
+    "reference_gene_path",
     "plot_scpred_scores_distribution",
     "plot_scpred_umap_py",
     "create_custom_cmap",

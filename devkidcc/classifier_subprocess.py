@@ -4,16 +4,61 @@ Provides a Python interface to the R DevKidCC package using subprocess
 This avoids the rpy2/reticulate segfault issue
 """
 
+import gc
 import warnings
 import tempfile
 import os
 import subprocess
 import shutil
+import sys
 from pathlib import Path
 from typing import Optional, Union
 import numpy as np
 import pandas as pd
 import anndata as ad
+from scipy.sparse import issparse, csc_matrix
+
+# Genes per batch when streaming the counts matrix out to CSV.
+_CSV_GENE_CHUNK = 500
+
+# Iterations passed to DKCC()'s knn.iter when KNN smoothing is on. Matches the
+# R-side default; 0 disables smoothing entirely.
+_DEFAULT_KNN_ITER = 20
+
+
+def reference_gene_path() -> Path:
+    """
+    Locate the DevKidCC reference gene list.
+
+    Resolution order: ``$DEVKIDCC_REF_GENES``, then the copy shipped inside the
+    package. Raises if neither is present — falling back to the full matrix
+    would silently reintroduce the out-of-memory kill the filter exists to
+    prevent.
+    """
+    override = os.environ.get('DEVKIDCC_REF_GENES')
+    if override:
+        path = Path(override)
+        if not path.exists():
+            raise FileNotFoundError(
+                f"$DEVKIDCC_REF_GENES points at {path}, which does not exist."
+            )
+        return path
+
+    packaged = Path(__file__).parent / "data" / "reference_genes.txt"
+    if packaged.exists():
+        return packaged
+
+    raise FileNotFoundError(
+        "DevKidCC reference gene list not found. Expected it at "
+        f"{packaged}, or set $DEVKIDCC_REF_GENES to a gene-per-line file. "
+        "Regenerate it with scripts/export_reference_genes.R."
+    )
+
+
+def load_reference_genes() -> set:
+    """Read the reference gene list as a set of symbols."""
+    with open(reference_gene_path()) as fh:
+        return {line.strip() for line in fh if line.strip()}
 
 
 class DevKidCCClassifier:
@@ -138,7 +183,9 @@ class DevKidCCClassifier:
                  adata: ad.AnnData,
                  threshold: float = 0.7,
                  max_iter: int = 1,
-                 copy: bool = True) -> ad.AnnData:
+                 copy: bool = True,
+                 knn_smooth: bool = True,
+                 knn_iter: Optional[int] = None) -> ad.AnnData:
         """
         Classify kidney cells using DevKidCC.
 
@@ -159,6 +206,12 @@ class DevKidCCClassifier:
             Usually 1 is sufficient.
         copy : bool, default=True
             Whether to return a copy (recommended)
+        knn_smooth : bool, default=True
+            Whether to rescue unassigned cells by KNN vote over the UMAP
+            embedding. Set False to benchmark the raw scPred assignments.
+        knn_iter : int, optional
+            Explicit iteration count for the KNN rescue, overriding
+            `knn_smooth`. Maps directly onto DKCC()'s `knn.iter`; 0 disables.
 
         Returns
         -------
@@ -166,6 +219,9 @@ class DevKidCCClassifier:
             Annotated data with classifications in .obs:
             - 'LineageID': Broad lineage category
             - 'DKCC': Detailed cell type annotation
+
+            The returned object keeps every gene it came in with — the
+            reference-gene filter below applies only to what is handed to R.
 
         Examples
         --------
@@ -187,12 +243,16 @@ class DevKidCCClassifier:
         if copy:
             adata = adata.copy()
 
+        if knn_iter is None:
+            knn_iter = _DEFAULT_KNN_ITER if knn_smooth else 0
+
         if self.verbose:
             print("=" * 60)
             print("DevKidCC Classification Pipeline (Subprocess Backend)")
             print("=" * 60)
             print(f"Input: {adata.n_obs} cells x {adata.n_vars} genes")
-            print(f"Parameters: threshold={threshold}, max_iter={max_iter}\n")
+            print(f"Parameters: threshold={threshold}, max_iter={max_iter}, "
+                  f"knn_iter={knn_iter}\n")
 
         # Create temp directory for files
         temp_dir = tempfile.mkdtemp()
@@ -206,13 +266,30 @@ class DevKidCCClassifier:
             if self.verbose:
                 print("Saving data to temporary files...")
 
-            # Save count matrix (genes x cells, transposed for R)
-            count_df = pd.DataFrame(
-                adata.X.T.toarray() if hasattr(adata.X, 'toarray') else adata.X.T,
-                index=adata.var_names,
-                columns=adata.obs_names
+            # Restrict what goes to R to the DevKidCC reference genes. The full
+            # matrix (e.g. 56k x 40k) produces a ~12 GB CSV that R must load
+            # entirely into RAM (~25 GB Seurat object) -> OOM kill. The ~9,977
+            # reference genes shrink that to ~3 GB of CSV and a ~6 GB R peak.
+            #
+            # This is a projection for the subprocess only. `adata` is never
+            # rebound: callers passing copy=False must get their own object back
+            # with every gene still on it.
+            ref_genes = load_reference_genes()
+            keep_idx = np.flatnonzero(
+                np.fromiter((g in ref_genes for g in adata.var_names),
+                            dtype=bool, count=adata.n_vars)
             )
-            count_df.to_csv(input_csv)
+            if keep_idx.size == 0:
+                raise ValueError(
+                    "None of the input genes are DevKidCC reference genes. "
+                    "Check that var_names are HGNC symbols and carry no genome "
+                    "prefix (e.g. 'GRCh38_GAPDH')."
+                )
+            if self.verbose:
+                print(f"  Gene filter: {keep_idx.size} / {adata.n_vars} "
+                      "reference genes retained")
+
+            self._write_counts_csv(adata, keep_idx, input_csv)
 
             # Save obs metadata
             adata.obs.to_csv(obs_csv)
@@ -226,16 +303,19 @@ class DevKidCCClassifier:
                 print("(Output from R script will appear below)\n")
                 print("-" * 60)
 
+            # R's own progress goes straight to our stdout rather than being
+            # buffered until the end: these runs take tens of minutes and a
+            # silent terminal is indistinguishable from a hang.
             result = subprocess.run(
                 [self.rscript_path, str(self.r_script), input_csv, output_csv, obs_csv,
-                 str(threshold), str(max_iter)],
-                capture_output=True,
+                 str(threshold), str(max_iter), str(knn_iter)],
+                stdout=sys.stdout,
+                stderr=subprocess.PIPE,
                 text=True,
                 timeout=3600  # 1 hour timeout
             )
 
             if self.verbose:
-                print(result.stdout)
                 print("-" * 60)
 
             if result.returncode != 0:
@@ -309,6 +389,37 @@ class DevKidCCClassifier:
 
         return adata
 
+    def _write_counts_csv(self, adata: ad.AnnData, keep_idx: np.ndarray,
+                          input_csv: str) -> None:
+        """
+        Stream the counts matrix out as genes x cells CSV, restricted to
+        `keep_idx` columns of `adata`.
+
+        Written in gene batches rather than through pandas: a single
+        `pd.DataFrame(adata.X.T.toarray()).to_csv()` materialises a dense array
+        and a DataFrame of it at the same time, which is what makes large inputs
+        fall over before R ever starts.
+        """
+        X_csc = csc_matrix(adata.X) if issparse(adata.X) else None
+        var_names = adata.var_names
+
+        with open(input_csv, 'w') as fh:
+            fh.write(',' + ','.join(adata.obs_names) + '\n')
+            for start in range(0, keep_idx.size, _CSV_GENE_CHUNK):
+                cols = keep_idx[start:start + _CSV_GENE_CHUNK]
+                if X_csc is not None:
+                    block = X_csc[:, cols].T.toarray()   # (chunk x cells)
+                else:
+                    block = np.asarray(adata.X[:, cols]).T
+                for i, col in enumerate(cols):
+                    fh.write(var_names[col] + ',' +
+                             ','.join(map(str, block[i].tolist())) + '\n')
+                del block
+                gc.collect()
+
+        del X_csc
+        gc.collect()
+
     def get_marker_genes(self, cell_type: str) -> pd.DataFrame:
         """
         Get marker genes for a specific cell type from the R package.
@@ -332,7 +443,9 @@ def classify_kidney_cells(adata: ad.AnnData,
                          max_iter: int = 1,
                          copy: bool = True,
                          verbose: bool = True,
-                         rscript_path: Optional[str] = None) -> ad.AnnData:
+                         rscript_path: Optional[str] = None,
+                         knn_smooth: bool = True,
+                         knn_iter: Optional[int] = None) -> ad.AnnData:
     """
     Classify kidney cells using DevKidCC (convenience wrapper).
 
@@ -353,6 +466,10 @@ def classify_kidney_cells(adata: ad.AnnData,
         Whether to print progress messages
     rscript_path : str, optional
         Path to Rscript executable
+    knn_smooth : bool, default=True
+        Whether to rescue unassigned cells by KNN vote over the UMAP embedding
+    knn_iter : int, optional
+        Explicit KNN iteration count, overriding `knn_smooth`; 0 disables
 
     Returns
     -------
@@ -377,4 +494,6 @@ def classify_kidney_cells(adata: ad.AnnData,
     >>> print(adata.obs['DKCC'].value_counts())
     """
     classifier = DevKidCCClassifier(verbose=verbose, rscript_path=rscript_path)
-    return classifier.classify(adata, threshold=threshold, max_iter=max_iter, copy=copy)
+    return classifier.classify(adata, threshold=threshold, max_iter=max_iter,
+                               copy=copy, knn_smooth=knn_smooth,
+                               knn_iter=knn_iter)

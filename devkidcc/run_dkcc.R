@@ -1,37 +1,39 @@
 #!/usr/bin/env Rscript
 #' Standalone R script to run DevKidCC classification
-#' Called by Python wrapper via subprocess
+#' Called by the Python wrapper via subprocess
 #'
-#' Usage: Rscript run_dkcc.R <input.csv> <output.csv> <input.obs.csv> [threshold] [max_iter]
+#' Usage: Rscript run_dkcc.R <input.csv> <output.csv> <input.obs.csv> [threshold] [max_iter] [knn_iter]
+#'
+#' Everything that used to be patched in here -- the Seurat v5 GetAssayData
+#' shim, the zero-variance gene filter, the PCA/UMAP needed by KNN smoothing,
+#' and the KNN rescue itself -- now lives in DevKidCC::DKCC(). This script only
+#' marshals data across the process boundary.
 
-# Parse command line arguments
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 3 || length(args) > 5) {
-  stop("Usage: Rscript run_dkcc.R <input.csv> <output.csv> <input.obs.csv> [threshold] [max_iter]")
+if (length(args) < 3 || length(args) > 6) {
+  stop("Usage: Rscript run_dkcc.R <input.csv> <output.csv> <input.obs.csv> [threshold] [max_iter] [knn_iter]")
 }
 
-input_csv <- args[1]
+input_csv  <- args[1]
 output_csv <- args[2]
-obs_csv <- args[3]
+obs_csv    <- args[3]
 
-# Optional parameters with defaults
-threshold <- ifelse(length(args) >= 4, as.numeric(args[4]), 0.7)
-max_iter <- ifelse(length(args) >= 5, as.integer(args[5]), 1)
+threshold <- if (length(args) >= 4) as.numeric(args[4])  else 0.7
+max_iter  <- if (length(args) >= 5) as.integer(args[5])  else 1L
+knn_iter  <- if (length(args) >= 6) as.integer(args[6])  else 20L
 
-# Validate input files exist
-if (!file.exists(input_csv)) {
-  stop(paste("Input file not found:", input_csv))
-}
-if (!file.exists(obs_csv)) {
-  stop(paste("Obs file not found:", obs_csv))
-}
+if (is.na(threshold)) stop("threshold must be numeric, got: ", args[4])
+if (is.na(max_iter))  stop("max_iter must be an integer, got: ", args[5])
+if (is.na(knn_iter))  stop("knn_iter must be an integer, got: ", args[6])
+
+if (!file.exists(input_csv)) stop(paste("Input file not found:", input_csv))
+if (!file.exists(obs_csv))   stop(paste("Obs file not found:", obs_csv))
 
 cat("============================================================\n")
 cat("DevKidCC Classification (R Backend)\n")
 cat("============================================================\n\n")
 
-# Load required libraries
 cat("Loading required R packages...\n")
 suppressPackageStartupMessages({
   library(Seurat)
@@ -39,48 +41,54 @@ suppressPackageStartupMessages({
 })
 
 cat("  Seurat version:", as.character(packageVersion("Seurat")), "\n")
-cat("  DevKidCC version:", as.character(packageVersion("DevKidCC")), "\n\n")
+cat("  DevKidCC version:", as.character(packageVersion("DevKidCC")), "\n")
 
-# Load count matrix from CSV
+# knn.iter arrived in DevKidCC 0.5.1. Fail loudly rather than silently running
+# an older DKCC() that ignores it -- the no-smoothing arm would otherwise be
+# reported as if it had run when it had not.
+if (!"knn.iter" %in% names(formals(DevKidCC::DKCC))) {
+  stop("Installed DevKidCC::DKCC() has no knn.iter parameter. ",
+       "Upgrade to >= 0.5.1: remotes::install_github('KidneyRegeneration/DevKidCC')")
+}
+cat("\n")
+
 cat("Loading expression data from CSV...\n")
 counts <- read.csv(input_csv, row.names = 1, check.names = FALSE)
 cat("  Matrix shape:", nrow(counts), "genes x", ncol(counts), "cells\n")
 
-# Load obs metadata
 cat("Loading metadata...\n")
 obs <- read.csv(obs_csv, row.names = 1, check.names = FALSE)
 cat("  Metadata:", nrow(obs), "cells x", ncol(obs), "columns\n\n")
 
-# Create Seurat object
 cat("Creating Seurat object...\n")
 seurat_obj <- CreateSeuratObject(counts = counts, meta.data = obs)
+rm(counts)
+invisible(gc())
 cat("  Cells:", ncol(seurat_obj), "\n")
 cat("  Features:", nrow(seurat_obj), "\n")
 cat("  Assays:", paste(names(seurat_obj@assays), collapse = ", "), "\n\n")
 
-# Normalize data
 cat("Normalizing data...\n")
 seurat_obj <- NormalizeData(seurat_obj)
 cat("  [OK] Normalization complete\n\n")
 
-# Run DKCC classification
 cat("Running DKCC classification...\n")
 cat("  Parameters:\n")
 cat("    - threshold:", threshold, "\n")
-cat("    - max.iter:", max_iter, "\n")
+cat("    - max.iter: ", max_iter, "\n")
+cat("    - knn.iter: ", knn_iter,
+    if (knn_iter == 0) " (KNN smoothing disabled)" else "", "\n")
 cat("This may take several minutes...\n\n")
 
 start_time <- Sys.time()
 
 tryCatch({
-  seurat_obj <- DKCC(seurat_obj, threshold = threshold, max.iter = max_iter)
+  seurat_obj <- DKCC(seurat_obj, threshold = threshold, max.iter = max_iter,
+                     knn.iter = knn_iter)
 
-  end_time <- Sys.time()
-  elapsed <- difftime(end_time, start_time, units = "secs")
-
+  elapsed <- difftime(Sys.time(), start_time, units = "secs")
   cat("\n[OK] Classification complete (", round(elapsed, 1), " seconds)\n\n")
 
-  # Show results
   if ("LineageID" %in% colnames(seurat_obj[[]])) {
     cat("Lineage assignments:\n")
     print(table(seurat_obj$LineageID, useNA = "ifany"))
@@ -89,8 +97,7 @@ tryCatch({
 
   if ("DKCC" %in% colnames(seurat_obj[[]])) {
     cat("Cell type assignments (top 10):\n")
-    dkcc_counts <- sort(table(seurat_obj$DKCC, useNA = "ifany"), decreasing = TRUE)
-    print(head(dkcc_counts, 10))
+    print(head(sort(table(seurat_obj$DKCC, useNA = "ifany"), decreasing = TRUE), 10))
     cat("\n")
   }
 
@@ -102,10 +109,8 @@ tryCatch({
   stop(paste("DKCC classification failed:", conditionMessage(e)))
 })
 
-# Save results metadata to CSV
 cat("Saving results...\n")
-result_metadata <- seurat_obj[[]]
-write.csv(result_metadata, output_csv, row.names = TRUE)
+write.csv(seurat_obj[[]], output_csv, row.names = TRUE)
 cat("  [OK] Results saved to:", output_csv, "\n\n")
 
 cat("============================================================\n")
