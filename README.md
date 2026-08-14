@@ -1,371 +1,197 @@
-# DevKidCC - Python Wrapper
+# DevKidCC — Python Wrapper
 
-**Dev**eloping **Kid**ney **C**ell **C**lassifier - Python interface using rpy2
+**Dev**eloping **Kid**ney **C**ell **C**lassifier, callable from Python.
 
-A Python wrapper for the R DevKidCC package, enabling seamless kidney cell classification in Python/Scanpy workflows.
+Classify cells in an `AnnData` object with the R DevKidCC package, without
+leaving a Scanpy workflow.
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![R Version](https://img.shields.io/badge/R-4.0+-blue.svg)](https://www.r-project.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Overview
+This branch (`python-wrapper`) of the DevKidCC repository holds the Python
+package. The R package itself lives on `main`; the container that ships both is
+built from `containerise`.
 
-This package provides a Python interface to the R DevKidCC package, allowing you to:
-- ✅ Use DevKidCC directly from Python/Scanpy workflows
-- ✅ Automatically convert between AnnData and Seurat formats
-- ✅ Auto-install R dependencies
-- ✅ Get the same results as the R package
+## How it works
 
-**Classification approach:**
-1. **Tier 1**: Broad lineage (Nephron, Stroma, Immune, etc.)
-2. **Tier 2**: Detailed cell types within each lineage
+The wrapper hands the counts matrix to R over a **subprocess**, not rpy2:
+
+```
+AnnData --> counts.csv + obs.csv --> Rscript run_dkcc.R --> results.csv --> .obs
+```
+
+rpy2 and reticulate segfault when both are loaded into one process, and Seurat
+pulls reticulate in. Talking to `Rscript` over a pipe sidesteps that entirely —
+at the cost of a CSV round trip, which is the reason for the gene projection
+described below.
+
+Classification is hierarchical, and it is `DKCC()` in the R package — not this
+wrapper — that implements it:
+
+1. **Stage 1** assigns a broad lineage (Nephron, Stroma, UrEp, NPC, Endo, …)
+2. **Stage 2/3** refine within that lineage
+3. Cells left `unassigned` are optionally rescued by a KNN vote over the UMAP
+   embedding (`knn_smooth`)
 
 ## Requirements
 
-### Python Requirements
-- Python >= 3.8
-- scanpy >= 1.9.0
-- anndata >= 0.8.0
-- rpy2 >= 3.5.0
-- anndata2ri >= 1.1.0
+**Python** ≥ 3.8, plus `numpy`, `pandas`, `scipy`, `anndata`, `scanpy`
+(`pip install -r requirements.txt`). No rpy2, no anndata2ri.
 
-### R Requirements
-- R >= 4.0
-- The following R packages (auto-installed if missing):
-  - Seurat
-  - SeuratDisk
-  - DevKidCC
+**R** ≥ 4.0 with `Seurat` (v5), `scPred`, and `DevKidCC` **≥ 0.5.1** — earlier
+releases have no `knn.iter` parameter and `run_dkcc.R` will refuse to run
+against them. Nothing is auto-installed; the classifier checks at construction
+and tells you what is missing.
+
+```r
+install.packages("Seurat")
+remotes::install_github("powellgenomicslab/scPred")
+remotes::install_github("KidneyRegeneration/DevKidCC")
+```
 
 ## Installation
 
-### Step 1: Install R
-
-If you don't have R installed:
-
-**macOS:**
 ```bash
-brew install r
+git clone -b python-wrapper https://github.com/KidneyRegeneration/DevKidCC
+cd DevKidCC
+pip install .
 ```
 
-**Ubuntu/Debian:**
-```bash
-sudo apt-get install r-base r-base-dev
-```
-
-**Windows:**
-Download from [CRAN](https://cran.r-project.org/bin/windows/base/)
-
-### Step 2: Install Python Package
+Or skip the R setup entirely and use the container, which carries R, Seurat,
+scPred, DevKidCC and this wrapper:
 
 ```bash
-pip install devkidcc
+singularity pull dkcc.sif docker://ghcr.io/kidneyregeneration/dkcc:latest
 ```
 
-Or from source:
-```bash
-git clone https://github.com/KidneyRegeneration/DevKidCC-python
-cd DevKidCC-python
-pip install -e .
-```
-
-### Step 3: Verify Installation
-
-```python
-python -c "import devkidcc; print('DevKidCC wrapper installed successfully!')"
-```
-
-## Quick Start
+## Quick start
 
 ```python
 import scanpy as sc
 from devkidcc import classify_kidney_cells
 
-# Load your kidney organoid or tissue data
 adata = sc.read_h5ad("kidney_organoid.h5ad")
-
-# Classify in one line! 
-# (R packages will be auto-installed on first run)
 adata = classify_kidney_cells(adata)
 
-# View results
-print(adata.obs[['LineageID', 'DKCC']].value_counts())
+print(adata.obs[["LineageID", "DKCC"]].value_counts())
 ```
 
-That's it! The first run will automatically:
-1. Check for required R packages
-2. Install them if missing
-3. Convert your data to Seurat format
-4. Run DevKidCC classification
-5. Convert results back to AnnData
+Input should be **raw counts** with HGNC gene symbols. Strip any genome prefix
+first — Cellranger multi-genome output writes `GRCh38_GAPDH`, which matches
+nothing in the reference.
 
 ## Usage
 
-### Basic Classification
+### Turning KNN smoothing off
+
+The unassigned-cell rescue is on by default. For benchmarking against raw scPred
+assignments:
+
+```python
+adata_raw = classify_kidney_cells(adata, knn_smooth=False)
+```
+
+`knn_iter` takes an explicit iteration count if you want one (it maps straight
+onto `DKCC()`'s `knn.iter`; `0` disables smoothing, and is what `knn_smooth=False`
+sets).
+
+### Reusing the classifier
+
+Construction runs the R dependency checks, so build it once for a batch:
 
 ```python
 from devkidcc import DevKidCCClassifier
 
-# Create classifier (checks/installs R packages)
-classifier = DevKidCCClassifier(verbose=True)
-
-# Classify your data
-adata = classifier.classify(adata)
-
-# Results are in adata.obs:
-# - 'LineageID': Broad cell lineage
-# - 'DKCC': Detailed cell type
-```
-
-### Recommended Workflow with QC
-
-```python
-import scanpy as sc
-from devkidcc import classify_kidney_cells
-
-# Load data
-adata = sc.read_h5ad("kidney_data.h5ad")
-
-# Quality control (recommended)
-sc.pp.filter_cells(adata, min_genes=200)
-sc.pp.filter_genes(adata, min_cells=3)
-
-# Calculate QC metrics
-adata.var['mt'] = adata.var_names.str.startswith('MT-')
-sc.pp.calculate_qc_metrics(adata, qc_vars=['mt'], inplace=True)
-
-# Filter poor quality cells
-adata = adata[adata.obs.pct_counts_mt < 20, :]
-
-# Classify
-adata = classify_kidney_cells(adata)
-
-# Save
-adata.write_h5ad("kidney_classified.h5ad")
-```
-
-### Batch Processing
-
-```python
-from devkidcc import DevKidCCClassifier
-
-# Create classifier once (R packages loaded once)
 classifier = DevKidCCClassifier(verbose=False)
-
-samples = ['sample1.h5ad', 'sample2.h5ad', 'sample3.h5ad']
-results = []
-
-for sample_file in samples:
-    adata = sc.read_h5ad(sample_file)
+for path in samples:
+    adata = sc.read_h5ad(path)
     adata = classifier.classify(adata)
-    adata.obs['sample'] = sample_file
-    results.append(adata)
-
-# Combine
-combined = sc.concat(results)
+    adata.write_h5ad(path.replace(".h5ad", "_DKCC.h5ad"))
 ```
 
-### Visualization
+### Large datasets
+
+The CSV handoff is the memory bottleneck: R loads the whole file before it
+builds a Seurat object. Two things keep that in hand.
+
+**The gene projection.** Only DevKidCC reference genes are written — everything
+else is discarded by scPred anyway. A 56k × 40k matrix goes from a ~12 GB CSV
+and a ~25 GB Seurat object to roughly ~3 GB and ~6 GB. The returned AnnData
+still carries every gene you passed in; the projection applies only to what
+crosses the process boundary.
+
+The list ships as `devkidcc/data/reference_genes.txt` (the union of feature
+loadings across all seven scPred models). Override it with `$DEVKIDCC_REF_GENES`,
+or regenerate it with `Rscript scripts/export_reference_genes.R`.
+
+**Chunking.** Above ~50k cells, classify in chunks and concatenate:
 
 ```python
-import scanpy as sc
+import anndata as ad
 
-# Compute UMAP if needed
-sc.pp.neighbors(adata)
-sc.tl.umap(adata)
-
-# Plot lineages
-sc.pl.umap(adata, color='LineageID', legend_loc='right margin')
-
-# Plot detailed cell types
-sc.pl.umap(adata, color='DKCC', legend_loc='on data', 
-           legend_fontsize=6)
-
-# Cell type proportions
-import matplotlib.pyplot as plt
-adata.obs['DKCC'].value_counts().plot(kind='barh')
-plt.xlabel('Number of Cells')
-plt.tight_layout()
-plt.show()
+chunks = [classifier.classify(adata[i:i + 10_000].copy())
+          for i in range(0, adata.n_obs, 10_000)]
+classified = ad.concat(chunks)
 ```
 
-## How It Works
+Also point `TMPDIR` somewhere with room — the counts CSV lands there, and a
+tmpfs `/tmp` will run out.
 
-1. **AnnData → Seurat**: Your AnnData object is saved as h5ad, then converted to Seurat's h5seurat format
-2. **R Classification**: The R DevKidCC package classifies cells in Seurat
-3. **Seurat → AnnData**: Results are converted back to h5ad and loaded into Python
-4. **Cleanup**: Temporary files are automatically removed
+## Output
 
-```
-Python (AnnData) → h5ad → h5seurat → R DevKidCC → h5seurat → h5ad → Python (AnnData)
-```
+| Column | Description | Example values |
+|--------|-------------|----------------|
+| `LineageID` | Stage 1 lineage | `Nephron`, `Stroma`, `UrEp`, `NPC`, `Endo`, `unassigned` |
+| `DKCC` | Refined cell type | `Podocyte`, `PT`, `EDT`, `SPC`, `NPC-like` |
+| `LineageID_max` | Stage 1 confidence | `0.0`–`1.0` |
 
-## Performance
-
-- **First run**: 2-5 minutes (R package installation)
-- **Subsequent runs**: 1-3 minutes for 10,000 cells
-- **Conversion overhead**: ~30 seconds for 10,000 cells
-
-## Comparison with Pure Python Approach
-
-### Advantages
-- ✅ Uses the exact same R models (guaranteed identical results)
-- ✅ No model retraining needed
-- ✅ Automatic R package management
-- ✅ Quick to set up (<5 minutes)
-- ✅ Always stays in sync with R package updates
-
-### Disadvantages
-- ❌ Requires R installation
-- ❌ Slower due to format conversions
-- ❌ More complex dependencies
+Per-model scPred probability columns are preserved alongside these.
 
 ## Troubleshooting
 
-### "R is not installed"
+**"Installed DevKidCC::DKCC() has no knn.iter parameter"** — the R package is
+older than 0.5.1. Reinstall from GitHub.
 
-Install R from [CRAN](https://cran.r-project.org/) or use your package manager:
-```bash
-# macOS
-brew install r
+**"None of the input genes are DevKidCC reference genes"** — `var_names` are not
+HGNC symbols, or carry a genome prefix. Check `adata.var_names[:10]`.
 
-# Ubuntu
-sudo apt-get install r-base
-```
+**"DevKidCC reference gene list not found"** — the packaged list is missing (an
+incomplete install). Regenerate it with `scripts/export_reference_genes.R`, or
+point `$DEVKIDCC_REF_GENES` at a copy. The wrapper deliberately raises here
+rather than falling back to the full matrix, which is what runs a machine out of
+memory.
 
-### "Unable to install R package"
-
-Install manually in R:
-```r
-# Open R console
-install.packages("Seurat")
-install.packages("devtools")
-devtools::install_github("mojaveazure/seurat-disk")
-devtools::install_github("KidneyRegeneration/DevKidCC")
-```
-
-Then try again in Python:
-```python
-classifier = DevKidCCClassifier(install_deps=False)
-```
-
-### "Gene names don't match"
-
-Ensure your gene names are in the correct format (usually HGNC symbols):
-```python
-# Check current format
-print(adata.var_names[:10])
-
-# Convert if needed
-adata.var_names = adata.var_names.str.upper()
-```
-
-### "Conversion failed"
-
-Check SeuratDisk installation:
-```r
-# In R
-library(Seurat)
-library(SeuratDisk)
-
-# If error, reinstall:
-devtools::install_github("mojaveazure/seurat-disk", force=TRUE)
-```
-
-### Memory Issues
-
-For very large datasets (>100k cells), consider:
-```python
-# Process in chunks
-from sklearn.model_selection import KFold
-
-kf = KFold(n_splits=5)
-results = []
-
-for train_idx, test_idx in kf.split(adata.obs):
-    subset = adata[test_idx].copy()
-    subset = classifier.classify(subset)
-    results.append(subset)
-
-adata_classified = sc.concat(results)
-```
-
-### rpy2 Installation Issues
-
-**macOS:** If you get compiler errors:
-```bash
-brew install pkg-config
-export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig"
-pip install rpy2
-```
-
-**Linux:** Install R development headers:
-```bash
-sudo apt-get install r-base-dev
-pip install rpy2
-```
-
-## Output Format
-
-Classification adds these columns to `adata.obs`:
-
-| Column | Description | Example Values |
-|--------|-------------|----------------|
-| `LineageID` | Broad lineage | "Nephron", "Stroma", "Immune" |
-| `DKCC` | Detailed cell type | "Podocyte", "Proximal Tubule" |
-
-Additional metadata columns from the R package are also preserved.
-
-## Citation
-
-If you use DevKidCC in your research, please cite:
-
-**Wilson et al., 2022, Genome Medicine**  
-"Integrated single-cell genomics reveals the landscape of epithelial, stromal and vascular development in human fetal kidney"  
-https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-022-01023-z
-
-## Examples
-
-See the [examples](examples/) directory for:
-- `example_usage.py` - Comprehensive examples
-- `tutorial.ipynb` - Jupyter notebook tutorial
-- `batch_processing.py` - Process multiple samples
+**Killed with no error** — the OOM killer. Reduce the chunk size and check
+`TMPDIR`.
 
 ## Development
 
-### Running Tests
-
 ```bash
 pip install pytest
-pytest tests/
+pytest                      # fast tests
+pytest -m slow -s           # end-to-end; needs R and real data
 ```
 
-### Contributing
+The slow tests are opt-in because they call R. `tests/test_regression_howden.py`
+compares a fresh run against stored labels and takes its input from
+`$DEVKIDCC_REGRESSION_H5AD` — see its docstring.
 
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Add tests
-4. Submit a pull request
+## Citation
 
-## Related Projects
+**Wilson et al., 2022, Genome Medicine** — "Integrated single-cell genomics
+reveals the landscape of epithelial, stromal and vascular development in human
+fetal kidney"
+https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-022-01023-z
 
-- **R DevKidCC Package**: https://github.com/KidneyRegeneration/DevKidCC
-- **Seurat**: https://satijalab.org/seurat/
-- **Scanpy**: https://scanpy.readthedocs.io/
+## Related
 
-## License
-
-MIT License - see [LICENSE](LICENSE) file
+- R DevKidCC package: https://github.com/KidneyRegeneration/DevKidCC
+- Container image: https://ghcr.io/kidneyregeneration/dkcc
+- Seurat: https://satijalab.org/seurat/
+- Scanpy: https://scanpy.readthedocs.io/
 
 ## Contact
 
-- **Author**: Sean Wilson
-- **Email**: sean.wilson@sund.ku.dk
-- **Issues**: https://github.com/KidneyRegeneration/DevKidCC-python/issues
-- **Original R Package**: https://github.com/KidneyRegeneration/DevKidCC
-
-## Acknowledgments
-
-- Original DevKidCC R package by Sean Wilson
-- Built using rpy2, Scanpy, and Seurat
-- Thanks to the kidney research community
+- **Author**: Sean Wilson — sean.wilson@sund.ku.dk
+- **Issues**: https://github.com/KidneyRegeneration/DevKidCC/issues

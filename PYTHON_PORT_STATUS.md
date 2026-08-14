@@ -1,7 +1,20 @@
 # DevKidCC-python Port Status
 
+> **Historical record — describes v0.1.0, not the current package.**
+>
+> This documents the original rpy2-based port, which segfaults: Seurat loads
+> reticulate, and reticulate and rpy2 cannot share a process. The wrapper was
+> reimplemented on a subprocess backend and everything below about the
+> architecture, dependencies and layout is superseded.
+>
+> Current architecture: [SUBPROCESS_IMPLEMENTATION.md](SUBPROCESS_IMPLEMENTATION.md).
+> Current usage and install: [README.md](README.md), [INSTALL.md](INSTALL.md).
+>
+> Kept because `devkidcc/classifier.py` — the rpy2 classifier described here —
+> is still in the tree, unexported and unused.
+
 **Date**: February 5, 2026
-**Status**: ✅ READY TO USE
+**Status**: superseded
 **Version**: 0.1.0
 
 ---

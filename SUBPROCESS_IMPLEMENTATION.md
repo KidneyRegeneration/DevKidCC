@@ -33,13 +33,16 @@ The DevKidCC Python wrapper has been successfully reimplemented using a subproce
 2. **`devkidcc/run_dkcc.R`** - Standalone R script
    - Can be called independently
    - Takes CSV inputs, outputs CSV
-   - Includes Seurat v5 compatibility patches
+   - Marshalling only: the Seurat v5 compatibility shim, the zero-variance gene
+     filter and the KNN rescue all live in `DevKidCC::DKCC()` (>= 0.5.1). This
+     script used to carry its own patched copy of that function; it no longer
+     does, and refuses to run against a package too old to have `knn.iter`.
 
 3. **`devkidcc/__init__.py`** - Updated to use subprocess classifier
 
-4. **`test_subprocess.py`** - Test script
+4. **`tests/test_smoke_synthetic.py`** - Test script
    - Verifies end-to-end functionality
-   - Uses synthetic data for testing
+   - Uses synthetic data drawn from the reference gene list
 
 ### Data Flow
 
@@ -75,16 +78,14 @@ print(adata.obs[['LineageID', 'DKCC']].value_counts())
 
 ## Testing
 
-Run the test script:
 ```bash
-python test_subprocess.py
+pytest                # fast tests: API surface, gene projection, CSV writer
+pytest -m slow -s     # end-to-end through R (synthetic data, and regression)
 ```
 
-Expected output:
-- [OK] Imports successful
-- [OK] Classifier initialized
-- [OK] Classification complete
-- TEST PASSED [OK]
+The synthetic-data run classifies nearly everything as `unassigned`, which is
+expected — random counts are not kidney cells. What it proves is that the
+handoff works in both directions.
 
 ## Advantages Over rpy2 Approach
 
@@ -96,28 +97,26 @@ Expected output:
 ## Disadvantages
 
 1. **File I/O overhead** - CSV writing/reading takes time
-2. **Memory** - Temporary files on disk
+2. **Memory** - the CSV is the binding constraint on large inputs; R loads it
+   whole before building a Seurat object. Mitigated by projecting onto the
+   DevKidCC reference genes and streaming the file out in gene batches rather
+   than through a dense pandas DataFrame.
 3. **No real-time R access** - Can't call arbitrary R functions on the fly
 
 ## Future Plans
 
-See [MEMORY.md](../../.claude/projects/c--Users-sbwil-Documents-VisualStudioProjects-scRNAseq/memory/MEMORY.md):
-
-**Native Python implementation** - Rewrite classification logic in Python using scikit-learn/scanpy to eliminate R dependency entirely. This would:
-- Remove R dependency
-- Be faster (no subprocess overhead)
-- Be easier to maintain
-- Allow better integration with Python scientific stack
+**Native Python implementation** - Rewrite classification logic in Python using
+scikit-learn/scanpy to eliminate the R dependency entirely. This would remove
+the subprocess overhead and the CSV round trip, at the cost of no longer being
+guaranteed identical to the published R models.
 
 ## Requirements
 
 - Python >= 3.8
 - R >= 4.0
-- R packages: Seurat, DevKidCC (SeuratDisk no longer needed!)
-- Python packages: pandas, numpy, scanpy, anndata
+- R packages: Seurat (v5), scPred, DevKidCC >= 0.5.1 (SeuratDisk no longer needed)
+- Python packages: pandas, numpy, scipy, scanpy, anndata
 
 ## Status
 
-✅ **Working and tested** - Ready for use with real data!
-
-Note: The test uses synthetic data, so all cells are classified as "unassigned" (expected). With real kidney scRNA-seq data, you'll see proper cell type classifications.
+✅ **Working and tested** - ready for use with real data.
