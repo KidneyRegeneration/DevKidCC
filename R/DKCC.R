@@ -247,10 +247,27 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1, knn.iter = 20) {
         RunPCA(npcs = 20) %>% RunUMAP(dims = 1:20) %>% FindNeighbors() %>% FindClusters(resolution = 0.5)
     }
 
-    npcs$Identity <- npcs$orig.ident
+    # 'orig.ident' does not survive the metadata rebuild above for objects that
+    # arrived as h5ad (the per-lineage scPredict() outputs are recombined via
+    # bind_rows()/left_join(), which drops it). Its only use is to populate
+    # 'Identity', which nothing downstream reads -- the very next line replaces
+    # orig.ident with "all" for GeneSummary()'s grouping -- so guard rather than
+    # require it.
+    npcs$Identity <- if ("orig.ident" %in% colnames(npcs[[]])) npcs$orig.ident else NA_character_
     npcs$orig.ident <- "all"
-    markers <- DevKidCC::GeneSummary(npcs, identity = "orig.ident", split.by = "RNA_snn_res.0.5", features = c("PAX2"))
-    pax2null <- (markers %>% filter(pct.exp < 33))$Component
+
+    if ("PAX2" %in% rownames(npcs)) {
+      markers <- DevKidCC::GeneSummary(npcs, identity = "orig.ident", split.by = "RNA_snn_res.0.5", features = c("PAX2"))
+      pax2null <- (markers %>% filter(pct.exp < 33))$Component
+    } else {
+      # PAX2 was dropped by the zero-variance filter above -- common when a small
+      # chunk of NPC cells expresses no PAX2 at all. Every cluster is then
+      # PAX2-null by definition, which is what the else branch below concludes
+      # anyway; treating them all as NPC-like keeps that behaviour instead of
+      # erroring out inside GeneSummary().
+      message("PAX2 not present in NPC subset (zero variance in this chunk) - treating all NPC clusters as NPC-like")
+      pax2null <- levels(factor(as.character(npcs$RNA_snn_res.0.5)))
+    }
 
     if (length(pax2null) > 0) {
       names <- colnames(npcs[, npcs$RNA_snn_res.0.5 %in% pax2null])
