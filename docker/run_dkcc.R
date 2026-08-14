@@ -16,6 +16,8 @@ suppressPackageStartupMessages({
     library(optparse)
     library(Seurat)
     library(SeuratDisk)
+    library(sceasy)
+    library(reticulate)
     library(DevKidCC)
     library(scCustomize)
 })
@@ -50,9 +52,19 @@ read_input <- function(path) {
     message("Reading input: ", path)
 
     if (ext == "h5ad") {
-        tmp_h5s <- sub("\\.h5ad$", ".h5seurat", tempfile())
-        Convert(path, dest = "h5seurat", overwrite = TRUE, filename = tmp_h5s)
-        obj <- LoadH5Seurat(tmp_h5s)
+        # SeuratDisk::Convert() can't parse the modern AnnData HDF5 schema
+        # (encoding-type/encoding-version attrs from anndata>=0.8 / scanpy>=1.9)
+        # and silently produces no output. sceasy reads the file via Python's
+        # own anndata module (through reticulate) instead, which handles the
+        # modern schema natively.
+        obj <- sceasy::convertFormat(path, from = "anndata", to = "seurat", main_layer = "counts")
+        # sceasy always builds a legacy (v4) Assay. DKCC() branches on
+        # inherits(assay, "Assay5"): when it's not, DKCC() rebuilds the
+        # Seurat object from scratch via CreateSeuratObject(), silently
+        # dropping any reductions (PCA/UMAP) computed upstream. Converting
+        # to Assay5 here makes DKCC() take its layer-joining branch instead,
+        # which preserves them.
+        obj[["RNA"]] <- as(object = obj[["RNA"]], Class = "Assay5")
     } else if (ext == "h5seurat") {
         obj <- LoadH5Seurat(path)
     } else if (ext == "h5") {
@@ -81,6 +93,11 @@ write_output <- function(obj, out_path, out_format) {
         stop("Output format must be 'h5ad' or 'rds'")
     }
 }
+
+# NOTE: this script used to patch DevKidCC::DKCC() here at runtime, rewriting its
+# body with deparse()/sub()/assignInNamespace() to guard a missing 'orig.ident'.
+# That guard now lives in the package itself (R/DKCC.R), together with a matching
+# guard for a PAX2 stripped by the zero-variance filter, so the rewrite is gone.
 
 message("Loading object...")
 seu <- read_input(opt$input)

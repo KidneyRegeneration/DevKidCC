@@ -70,10 +70,21 @@ process_file() {
 if [[ -f "$INPUT_PATH" ]]; then
     process_file "$INPUT_PATH"
 elif [[ -d "$INPUT_PATH" ]]; then
-    for pattern in "${SUPPORTED_EXTENSIONS[@]}"; do
-        find "$INPUT_PATH" -type f -name "$pattern" | while read -r file; do
-            process_file "$file"
-        done
+    # Enumerate the full input list up front, before any processing starts.
+    # Streaming `find | while read` here is racy: process_file() writes its
+    # "<stem>_DKCC.<ext>" output into the same directory being scanned, and
+    # since outputs share an extension with the inputs (e.g. both are
+    # .h5ad), a still-running `find` can pick up an output file that was
+    # just written and reprocess it as if it were new input. Excluding the
+    # "_DKCC." naming convention is a second layer of defense in case this
+    # folder already contains previous outputs alongside fresh input files.
+    mapfile -t files < <(
+        for pattern in "${SUPPORTED_EXTENSIONS[@]}"; do
+            find "$INPUT_PATH" -type f -name "$pattern"
+        done | grep -v '_DKCC\.' | sort -u
+    )
+    for file in "${files[@]}"; do
+        process_file "$file"
     done
 else
     echo "ERROR: Input path does not exist: $INPUT_PATH"
