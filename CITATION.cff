@@ -1,0 +1,55 @@
+cff-version: 1.2.0
+title: "DevKidCC: Developing Kidney Cell Classifier"
+message: "If you use this software, please cite the Genome Medicine paper below."
+type: software
+authors:
+  - given-names: Sean
+    family-names: Wilson
+    email: sbwilson91@gmail.com
+    orcid: "https://orcid.org/0000-0002-8994-0781"
+    affiliation: "Murdoch Children's Research Institute"
+repository-code: "https://github.com/KidneyRegeneration/DevKidCC"
+license: MIT
+version: 0.5.1
+abstract: >-
+  DevKidCC classifies cells in single-cell RNA-seq data of the developing human
+  kidney and of kidney organoids into their most likely cell type, using a
+  hierarchical set of scPred models trained on a human fetal kidney reference.
+  It reads Seurat objects in R and AnnData objects in Python, and is distributed
+  as a container carrying both stacks.
+keywords:
+  - single-cell RNA-seq
+  - kidney organoid
+  - cell type classification
+  - kidney development
+  - scPred
+
+preferred-citation:
+  type: article
+  title: >-
+    DevKidCC allows for robust classification and direct comparisons of kidney
+    organoid datasets
+  authors:
+    - given-names: "Sean B."
+      family-names: Wilson
+      orcid: "https://orcid.org/0000-0002-8994-0781"
+    - given-names: "Sara E."
+      family-names: Howden
+    - given-names: "Jessica M."
+      family-names: Vanslambrouck
+    - given-names: Aude
+      family-names: Dorison
+    - given-names: Jose
+      family-names: Alquicira-Hernandez
+    - given-names: "Joseph E."
+      family-names: Powell
+    - given-names: "Melissa H."
+      family-names: Little
+      orcid: "https://orcid.org/0000-0003-0380-2263"
+  journal: "Genome Medicine"
+  year: 2022
+  volume: 14
+  issue: 1
+  start: 19
+  doi: "10.1186/s13073-022-01023-z"
+  url: "https://doi.org/10.1186/s13073-022-01023-z"

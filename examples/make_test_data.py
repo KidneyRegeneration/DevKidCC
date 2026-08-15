@@ -33,6 +33,14 @@ import scipy.sparse as sp
 SEED = 42
 N_CELLS = 600
 
+# Public sources, for anyone reproducing this from scratch:
+#   organoid_howden  Howden et al. 2019 kidney organoids, GEO GSE118184
+#   fetal_menon      Menon et al. 2018 human fetal kidney, GEO GSE109205
+#
+# The defaults below are this project's QC-filtered copies. Point --source at
+# your own raw-count h5ad to run the same comparison on other data; the cell
+# totals after QC differ from the raw GEO matrices, so a subset drawn from GEO
+# directly will not be the same 600 cells.
 SOURCES = {
     "organoid_howden": "/data/homeserver/data/datasets/Howden_2019_Organoids/processed/Howden_2019_Organoids_qc.h5ad",
     "fetal_menon": "/data/homeserver/data/datasets/Menon_2018_HFK/processed/Menon_2018_HFK_qc.h5ad",
@@ -67,10 +75,26 @@ def main() -> None:
     p.add_argument("--out", type=Path, default=Path("."), help="output directory")
     p.add_argument("--n-cells", type=int, default=N_CELLS)
     p.add_argument("--seed", type=int, default=SEED)
+    p.add_argument(
+        "--source",
+        action="append",
+        metavar="NAME=PATH",
+        help="override or add a source, e.g. --source mysample=/path/raw.h5ad "
+             "(repeatable; replaces the defaults entirely when given)",
+    )
     args = p.parse_args()
 
+    sources = SOURCES
+    if args.source:
+        sources = {}
+        for spec in args.source:
+            if "=" not in spec:
+                raise SystemExit(f"--source needs NAME=PATH, got {spec!r}")
+            name, _, path = spec.partition("=")
+            sources[name] = path
+
     args.out.mkdir(parents=True, exist_ok=True)
-    for name, src in SOURCES.items():
+    for name, src in sources.items():
         src = Path(src)
         if not src.exists():
             print(f"skipping {name}: {src} not present on this machine")
@@ -78,7 +102,7 @@ def main() -> None:
         write(subset(src, args.n_cells, args.seed), args.out / name)
 
     print("\nNow build the .rds companions:")
-    for name in SOURCES:
+    for name in sources:
         s = args.out / name
         print(f"  Rscript build_rds_from_mtx.R {s}.mtx {s}.genes.txt {s}.cells.txt {s}.rds")
 
