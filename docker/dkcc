@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+
+# Route a file to the entry point that owns its format.
+#
+#   .h5ad                        -> python /opt/run_dkcc.py   (anndata reads it)
+#   .rds .RData .h5seurat .h5    -> Rscript /opt/run_dkcc.R   (Seurat reads it)
+#
+# The image has always contained both an R and a Python stack, but every
+# invocation went to R: run_dkcc.sh called `Rscript /opt/run_dkcc.R` whatever the
+# input was, so an h5ad was read by R calling back out to Python's anndata
+# through reticulate, converted to Seurat, classified, then converted back. Every
+# h5ad bug we have hit lived in that round trip and none of them were possible
+# from the Python side, which had the file open natively the whole time.
+#
+# Both paths still end in the same DevKidCC::DKCC() -- the Python wrapper shells
+# out to R over a CSV handoff. What changes here is only which side reads and
+# writes the file, and that is decided by the file, not by the caller.
+#
+# Usage:
+#   /opt/dkcc --input sample.h5ad --output sample_DKCC.h5ad
+#   /opt/dkcc --input sample.rds  --output sample_DKCC.rds
+
+set -euo pipefail
+
+PY_SCRIPT="${DKCC_PY_SCRIPT:-/opt/run_dkcc.py}"
+R_SCRIPT="${DKCC_R_SCRIPT:-/opt/run_dkcc.R}"
+
+usage() {
+    cat <<'EOF'
+
+Usage: dkcc --input <file> --output <file> [--format rds] [extra options]
+
+  .h5ad                     -> Python entry point (run_dkcc.py)
+  .rds .RData .h5seurat .h5 -> R entry point      (run_dkcc.R)
+
+Options beyond --input/--output are passed through to whichever entry point
+runs, so use that script's own flags (--threshold, --max-iter, --knn-iter for
+Python; --format for R).
+
+EOF
+    exit 1
+}
+
+INPUT=""
+args=("$@")
+
+# Only --input is inspected here; everything, including --input itself, is
+# forwarded untouched so each entry point keeps its own argument parsing.
+for i in "${!args[@]}"; do
+    case "${args[$i]}" in
+        -i|--input)
+            INPUT="${args[$((i + 1))]:-}"
+            ;;
+        --input=*)
+            INPUT="${args[$i]#--input=}"
+            ;;
+        -h|--help)
+            usage
+            ;;
+    esac
+done
+
+if [[ -z "$INPUT" ]]; then
+    echo "ERROR: --input is required" >&2
+    usage
+fi
+
+# Lowercase the extension so Sample.H5AD and sample.Rds route like their
+# lowercase forms; the batch script already accepts both spellings.
+ext="${INPUT##*.}"
+ext="${ext,,}"
+
+case "$ext" in
+    h5ad)
+        echo "Routing to the Python entry point (.h5ad is AnnData's format)"
+        exec python "$PY_SCRIPT" "${args[@]}"
+        ;;
+    rds|rdata|h5seurat|h5)
+        echo "Routing to the R entry point (.${ext} is read by Seurat)"
+        exec Rscript "$R_SCRIPT" "${args[@]}"
+        ;;
+    *)
+        echo "ERROR: unsupported input extension '.${ext}'" >&2
+        echo "       Supported: .h5ad (Python) .rds .RData .h5seurat .h5 (R)" >&2
+        exit 1
+        ;;
+esac

@@ -84,22 +84,24 @@ RUN Rscript -e 'remotes::install_local(".", upgrade="never")'
 RUN python --version
 RUN python -c "import devkidcc"
 
-# run_dkcc.R reads h5ad through sceasy, which reaches Python's anndata via
-# reticulate. Until now this variable was set only by run_dkcc.sh at exec time,
-# so reticulate had to go looking whenever the R script was invoked directly --
-# which is exactly how the README documents the R entry point, and how anyone
-# running `docker run ... Rscript /opt/run_dkcc.R` reaches it. Set it in the
-# image so the entry point works on its own terms.
+# No entry point calls reticulate any more -- h5ad is read in Python and the R
+# script only touches R-native formats -- but any R package that loads reticulate
+# on its own would otherwise provision a fresh interpreter with uv. Pin it to the
+# environment that already has everything.
 #
 # Deliberately placed after the heavy layers: an ENV near the top of the file
 # invalidates every layer below it, and this one is only needed at runtime.
 ENV RETICULATE_PYTHON=/opt/micromamba/envs/devkid/bin/python
 
-# Copy run scripts to a convenient location
+# Copy run scripts to a convenient location. /opt/dkcc is the entry point to
+# reach for: it routes h5ad to the Python side and R-native formats to the R
+# side, so the file decides which stack reads it.
+COPY docker/dkcc /opt/dkcc
+COPY docker/run_dkcc.py /opt/run_dkcc.py
 COPY docker/run_dkcc.R /opt/run_dkcc.R
 COPY docker/run_dkcc_batch.sh /opt/run_dkcc_batch.sh
 COPY docker/smoke_test.py /opt/smoke_test.py
-RUN chmod +x /opt/run_dkcc.R /opt/run_dkcc_batch.sh /opt/smoke_test.py
+RUN chmod +x /opt/dkcc /opt/run_dkcc.py /opt/run_dkcc.R /opt/run_dkcc_batch.sh /opt/smoke_test.py
 
 WORKDIR /data
 CMD ["/bin/bash"]

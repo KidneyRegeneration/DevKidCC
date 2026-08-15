@@ -3,22 +3,25 @@
 # Run DKCC on a single file or recursively on a folder.
 #
 # Usage (single file):
-#   bash /opt/run_dkcc_batch.sh -i sample.h5ad [-o h5ad|rds]
+#   bash /opt/run_dkcc_batch.sh -i sample.h5ad
 #
 # Usage (folder):
-#   bash /opt/run_dkcc_batch.sh -i /path/to/folder [-o h5ad|rds]
+#   bash /opt/run_dkcc_batch.sh -i /path/to/folder
+#
+# Each file is routed by extension: .h5ad goes to the Python entry point,
+# R-native formats to the R one. The output format therefore follows the input
+# rather than being chosen for the whole folder -- a folder may hold both.
 #
 # Optional:
-#   -r /path/to/run_dkcc.R   override the run script location
+#   -r /path/to/dkcc   override the dispatcher location
 
 set -euo pipefail
 
-OUTPUT_FORMAT="h5ad"
-RSCRIPT_PATH="/opt/run_dkcc.R"
+DISPATCH_PATH="/opt/dkcc"
 
 usage() {
     echo ""
-    echo "Usage: bash run_dkcc_batch.sh -i <input_file_or_folder> [-o h5ad|rds] [-r run_dkcc.R]"
+    echo "Usage: bash run_dkcc_batch.sh -i <input_file_or_folder> [-r /opt/dkcc]"
     echo ""
     exit 1
 }
@@ -26,8 +29,8 @@ usage() {
 while getopts "i:o:r:" opt; do
     case ${opt} in
         i) INPUT_PATH="$OPTARG" ;;
-        o) OUTPUT_FORMAT="$OPTARG" ;;
-        r) RSCRIPT_PATH="$OPTARG" ;;
+        o) echo "NOTE: -o is ignored; each file's output format follows its input." ;;
+        r) DISPATCH_PATH="$OPTARG" ;;
         *) usage ;;
     esac
 done
@@ -45,15 +48,16 @@ process_file() {
     dir=$(dirname "$infile")
     base=$(basename "$infile")
 
+    local out_format
     case "$base" in
-        *.h5ad)    stem="${base%.h5ad}" ;;
-        *.h5seurat) stem="${base%.h5seurat}" ;;
-        *.RData)   stem="${base%.RData}" ;;
-        *.rdata)   stem="${base%.rdata}" ;;
-        *)         stem="${base%.*}" ;;
+        *.h5ad)     stem="${base%.h5ad}";     out_format="h5ad" ;;
+        *.h5seurat) stem="${base%.h5seurat}"; out_format="rds"  ;;
+        *.RData)    stem="${base%.RData}";    out_format="rds"  ;;
+        *.rdata)    stem="${base%.rdata}";    out_format="rds"  ;;
+        *)          stem="${base%.*}";        out_format="rds"  ;;
     esac
 
-    outfile="${dir}/${stem}_DKCC.${OUTPUT_FORMAT}"
+    outfile="${dir}/${stem}_DKCC.${out_format}"
 
     echo "----------------------------------------"
     echo "Processing:"
@@ -61,10 +65,9 @@ process_file() {
     echo "  Output: $outfile"
     echo "----------------------------------------"
 
-    Rscript "$RSCRIPT_PATH" \
+    "$DISPATCH_PATH" \
         --input  "$infile" \
-        --output "$outfile" \
-        --format "$OUTPUT_FORMAT"
+        --output "$outfile"
 }
 
 if [[ -f "$INPUT_PATH" ]]; then

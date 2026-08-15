@@ -2,19 +2,30 @@
 """
 Prove that both halves of this image actually run.
 
-The container ships two entry points -- an R one (`/opt/run_dkcc.R`) and a Python
-one (`import devkidcc`) -- and until now CI only proved the image *built*. It
-built green five times while both paths were broken end to end: the Python path
-died on a missing UMAP reduction, the R path died inside SeuratDisk's h5ad
-converter. Neither is visible from a successful `docker build`.
+The container ships two entry points -- Python for h5ad, R for Seurat-native
+files -- and until now CI only proved the image *built*. It built green five
+times while both paths were broken end to end: the Python path died on a missing
+UMAP reduction, the R path died inside SeuratDisk's h5ad converter. Neither is
+visible from a successful `docker build`.
 
-So: synthesise a small counts matrix over the packaged reference genes, push it
-through both paths, and require classification columns to come back. No network,
-no data download, no fixture in git -- the gene list is already inside the
-wheel.
+So: synthesise a small counts matrix over the packaged reference genes and push
+it through every way a user can reach the classifier --
+
+    1. the Python API,      devkidcc.classify_kidney_cells()
+    2. an h5ad via /opt/dkcc, which must route it to run_dkcc.py
+    3. an .rds  via /opt/dkcc, which must route it to run_dkcc.R
+
+-- requiring classification columns back from each. No network, no data
+download, no fixture in git: the gene list is already inside the wheel and the
+.rds is built here by Seurat itself.
+
+Checks 2 and 3 are as much about the routing as the classifying. h5ad used to be
+read by R calling back into Python through reticulate, and the h5ad-shaped bugs
+all lived in that round trip; a regression that quietly sent h5ad back to R would
+otherwise look identical to a passing run.
 
 The synthetic matrix is noise, so the labels it produces are meaningless and
-deliberately not asserted on. What is asserted is that the pipeline completes and
+deliberately not asserted on. What is asserted is that each path completes and
 returns `DKCC`/`LineageID` for every cell, which is exactly the property that was
 silently false.
 
@@ -47,6 +58,8 @@ N_GENES = 4000
 # Columns DKCC() is contracted to add. These are what downstream code reads.
 REQUIRED_COLUMNS = ("DKCC", "LineageID")
 
+DISPATCH = Path("/opt/dkcc")
+PY_SCRIPT = Path("/opt/run_dkcc.py")
 R_SCRIPT = Path("/opt/run_dkcc.R")
 
 
@@ -104,8 +117,34 @@ def check_columns(obs: pd.DataFrame, label: str) -> None:
     print(f"  [{label}] LineageID: {counts.to_dict()}")
 
 
-def check_python_path(adata: ad.AnnData) -> None:
-    print("Python path: devkidcc.classify_kidney_cells()")
+def run(cmd: list[str], label: str) -> subprocess.CompletedProcess:
+    """
+    Run a subprocess, and on any failure -- not just a non-zero exit -- put its
+    own output in the log. These scripts can exit 0 having written a file with no
+    labels in it, and swallowing the log in that case costs a full container
+    rebuild to learn nothing.
+    """
+    print(f"  $ {' '.join(cmd)}")
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+
+def require_routed_to(proc: subprocess.CompletedProcess, expected: str, label: str) -> None:
+    """
+    The dispatcher announces which side it picked. Assert on it: sending h5ad
+    back to R would still classify (R used to convert it via reticulate) and so
+    would pass every other check here while reintroducing the exact round trip
+    this split removed.
+    """
+    if expected not in proc.stdout:
+        raise RuntimeError(
+            f"FAIL [{label}]: expected the dispatcher to route to the {expected} "
+            "entry point; it did not say so"
+        )
+    print(f"  [{label}] routed to the {expected} entry point")
+
+
+def check_python_api(adata: ad.AnnData) -> None:
+    print("1. Python API: devkidcc.classify_kidney_cells()")
     import devkidcc
 
     print(f"  wrapper: {devkidcc.__file__}")
@@ -115,44 +154,101 @@ def check_python_path(adata: ad.AnnData) -> None:
     # object it returns must still be the caller's, at full width.
     if result.n_vars != adata.n_vars:
         raise RuntimeError(
-            f"FAIL [python]: returned {result.n_vars} genes, input had {adata.n_vars} "
-            "-- the reference-gene projection leaked into the caller's object"
+            f"FAIL [python-api]: returned {result.n_vars} genes, input had "
+            f"{adata.n_vars} -- the reference-gene projection leaked into the "
+            "caller's object"
         )
-    check_columns(result.obs, "python")
+    check_columns(result.obs, "python-api")
 
 
-def check_r_path(adata: ad.AnnData, workdir: Path) -> None:
-    print(f"R path: Rscript {R_SCRIPT}")
-    if not R_SCRIPT.exists():
-        raise RuntimeError(f"FAIL [r]: {R_SCRIPT} not in the image")
+def check_h5ad_path(adata: ad.AnnData, workdir: Path) -> None:
+    print(f"2. h5ad via {DISPATCH} (must route to Python)")
+    for path in (DISPATCH, PY_SCRIPT):
+        if not path.exists():
+            raise RuntimeError(f"FAIL [h5ad]: {path} not in the image")
 
     src = workdir / "smoke_in.h5ad"
     dst = workdir / "smoke_out.h5ad"
     adata.write_h5ad(src)
 
-    proc = subprocess.run(
-        ["Rscript", str(R_SCRIPT), "--input", str(src), "--output", str(dst)],
-        capture_output=True,
-        text=True,
-    )
-
-    # R's own output goes to the log on *any* failure, not just a non-zero exit.
-    # The script can exit 0 and still hand back an object missing the
-    # classification columns, and swallowing its log in that case cost a full
-    # container rebuild to find out nothing.
+    proc = run([str(DISPATCH), "--input", str(src), "--output", str(dst)], "h5ad")
     try:
+        require_routed_to(proc, "Python", "h5ad")
         if proc.returncode != 0:
-            raise RuntimeError(f"FAIL [r]: run_dkcc.R exited {proc.returncode}")
+            raise RuntimeError(f"FAIL [h5ad]: dispatcher exited {proc.returncode}")
         if not dst.exists():
-            raise RuntimeError(f"FAIL [r]: run_dkcc.R wrote no output at {dst}")
-
-        obs = ad.read_h5ad(dst).obs
-        print(f"  [r] obs columns written: {list(obs.columns)}")
-        check_columns(obs, "r")
+            raise RuntimeError(f"FAIL [h5ad]: no output written at {dst}")
+        check_columns(ad.read_h5ad(dst).obs, "h5ad")
     except Exception:
         sys.stdout.write(proc.stdout)
         sys.stderr.write(proc.stderr)
         raise
+
+
+# Built by Seurat rather than converted from the h5ad: converting is precisely
+# what this image no longer does, and a fixture that needed the conversion
+# libraries to exist would defeat the point of removing them.
+BUILD_RDS = r"""
+suppressPackageStartupMessages(library(Seurat))
+args <- commandArgs(trailingOnly = TRUE)
+counts <- as.matrix(read.csv(args[1], row.names = 1, check.names = FALSE))
+seu <- CreateSeuratObject(counts = counts, project = "smoke")
+saveRDS(seu, args[2])
+cat("built", args[2], "with", ncol(seu), "cells x", nrow(seu), "genes\n")
+"""
+
+# The R object's metadata comes back out as a CSV so the assertions stay in one
+# place, in Python, for every path.
+DUMP_OBS = r"""
+args <- commandArgs(trailingOnly = TRUE)
+seu <- readRDS(args[1])
+write.csv(seu[[]], args[2])
+"""
+
+
+def check_r_path(adata: ad.AnnData, workdir: Path) -> None:
+    print(f"3. .rds via {DISPATCH} (must route to R)")
+    if not R_SCRIPT.exists():
+        raise RuntimeError(f"FAIL [rds]: {R_SCRIPT} not in the image")
+
+    counts_csv = workdir / "smoke_counts.csv"
+    src = workdir / "smoke_in.rds"
+    dst = workdir / "smoke_out.rds"
+    obs_csv = workdir / "smoke_out_obs.csv"
+
+    # Seurat wants genes as rows.
+    pd.DataFrame(
+        adata.X.T, index=adata.var_names, columns=adata.obs_names
+    ).to_csv(counts_csv)
+
+    build = run(["Rscript", "-e", BUILD_RDS, str(counts_csv), str(src)], "rds")
+    if build.returncode != 0 or not src.exists():
+        sys.stdout.write(build.stdout)
+        sys.stderr.write(build.stderr)
+        raise RuntimeError("FAIL [rds]: could not build the .rds fixture")
+    print(f"  {build.stdout.strip().splitlines()[-1]}")
+
+    proc = run([str(DISPATCH), "--input", str(src), "--output", str(dst)], "rds")
+    try:
+        require_routed_to(proc, "R", "rds")
+        if proc.returncode != 0:
+            raise RuntimeError(f"FAIL [rds]: dispatcher exited {proc.returncode}")
+        if not dst.exists():
+            raise RuntimeError(f"FAIL [rds]: no output written at {dst}")
+    except Exception:
+        sys.stdout.write(proc.stdout)
+        sys.stderr.write(proc.stderr)
+        raise
+
+    dump = run(["Rscript", "-e", DUMP_OBS, str(dst), str(obs_csv)], "rds")
+    if dump.returncode != 0 or not obs_csv.exists():
+        sys.stdout.write(dump.stdout)
+        sys.stderr.write(dump.stderr)
+        raise RuntimeError("FAIL [rds]: could not read metadata back out of the output")
+
+    obs = pd.read_csv(obs_csv, index_col=0)
+    print(f"  [rds] metadata written: {list(obs.columns)}")
+    check_columns(obs, "rds")
 
 
 def main() -> int:
@@ -160,28 +256,29 @@ def main() -> int:
     genes = reference_genes()
     adata = synthetic_adata(genes)
 
-    # Both paths run even when the first fails. Each CI round trip costs a
+    # Every path runs even when an earlier one fails. Each CI round trip costs a
     # container build, so one run should report everything that is broken rather
     # than the first thing that is.
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="dkcc_smoke_") as tmp:
         workdir = Path(tmp)
-        for label, run in (
-            ("python", lambda: check_python_path(adata.copy())),
-            ("r", lambda: check_r_path(adata.copy(), workdir)),
+        for label, check in (
+            ("python-api", lambda: check_python_api(adata.copy())),
+            ("h5ad", lambda: check_h5ad_path(adata.copy(), workdir)),
+            ("rds", lambda: check_r_path(adata.copy(), workdir)),
         ):
             try:
-                run()
+                check()
             except Exception:
                 traceback.print_exc()
                 failures.append(label)
             print()
 
     if failures:
-        print(f"FAIL: {', '.join(failures)} entry point(s) did not classify the input.")
+        print(f"FAIL: {', '.join(failures)} path(s) did not classify the input.")
         return 1
 
-    print("PASS: both the R and Python entry points classified the input.")
+    print("PASS: the Python API, h5ad routing and .rds routing all classified the input.")
     return 0
 
 
