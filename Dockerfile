@@ -93,6 +93,20 @@ RUN python -c "import devkidcc"
 # invalidates every layer below it, and this one is only needed at runtime.
 ENV RETICULATE_PYTHON=/opt/micromamba/envs/devkid/bin/python
 
+# Give the two libraries that insist on writing a cache somewhere writable to
+# write to. numba compiles scanpy's kernels with cache=True; when the image is
+# read-only -- which it always is under Singularity -- it falls back to $HOME,
+# and if $HOME is absent too it raises rather than skipping the cache:
+#
+#   RuntimeError: cannot cache function 'agg_sum_csr-parallel': no locator
+#   available for file '.../scanpy/get/_kernels.py'
+#
+# That turns `import devkidcc` into a hard failure for anyone running with
+# --no-home or a nologin service account. matplotlib fails the same way but
+# only warns. /tmp is writable in every runtime, with or without --contain.
+ENV NUMBA_CACHE_DIR=/tmp/numba-cache \
+    MPLCONFIGDIR=/tmp/matplotlib
+
 # Copy run scripts to a convenient location. /opt/dkcc is the entry point to
 # reach for: it routes h5ad to the Python side and R-native formats to the R
 # side, so the file decides which stack reads it.
