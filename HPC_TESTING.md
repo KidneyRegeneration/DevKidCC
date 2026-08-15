@@ -49,6 +49,33 @@ If this 401s, the package is private — make it public in the GHCR package
 settings, or `singularity remote login -u <github-user> docker://ghcr.io` with a
 PAT that has `read:packages`.
 
+**If it dies with `stream ID <n>; PROTOCOL_ERROR`**, that is an HTTP/2 transport
+fault between Singularity and GHCR, not a permissions or disk problem. Retrying
+does not help: Singularity restarts the whole pull each time rather than resuming,
+so a 4 GB image never gets to the end. This happened on every attempt during local
+testing. Use skopeo instead — it reconnects *inside* a blob and carries on from
+the byte it reached, which is the difference that gets a 4 GB image home:
+
+```bash
+# Drop to HTTP/1.1 (both are Go binaries, so GODEBUG reaches their HTTP stack)
+export GODEBUG=http2client=0
+
+skopeo copy --retry-times 10 \
+    docker://ghcr.io/kidneyregeneration/dkcc:containerise-v0.5.1 \
+    oci:$PWD/dkcc-oci:v051
+
+# Then build the SIF from the local copy -- no network involved.
+# Note: no :tag here. Singularity treats everything after `oci:` as a path,
+# so `oci:$PWD/dkcc-oci:v051` looks for a directory literally named "dkcc-oci:v051".
+singularity build dkcc-v051.sif oci:$PWD/dkcc-oci
+```
+
+Expect log lines like `Reading blob body ... failed (unexpected EOF), reconnecting
+after 1614807040 bytes` — that is the resume working, not an error.
+
+`skopeo` is widely available on HPC systems; if it is not, `module spider skopeo`
+or ask the helpdesk. The local OCI directory can be deleted once the SIF is built.
+
 ## 3. Sanity-check the image (login node, no SLURM)
 
 ```bash
