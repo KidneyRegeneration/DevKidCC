@@ -29,15 +29,21 @@ Three claims are tested:
 Two 600-cell subsets, one organoid and one fetal kidney, so the comparison is
 not resting on a single tissue:
 
-| Name | Source | Cells | Genes |
-|---|---|---|---|
-| `organoid_howden` | Howden 2019 kidney organoids (`Howden_2019_Organoids_qc.h5ad`, 5,365 cells) | 600 | 22,073 |
-| `fetal_menon` | Menon 2018 human fetal kidney (`Menon_2018_HFK_qc.h5ad`) | 600 | 26,469 |
+| Name | Source | Accession | Source cells | Subset | Genes |
+|---|---|---|---|---|---|
+| `organoid_howden` | Howden et al. 2019, human iPSC-derived kidney organoids | [GSE118184](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE118184) | 5,365 | 600 | 22,073 |
+| `fetal_menon` | Menon et al. 2018, human fetal kidney (Drop-seq; PMID [30166318](https://pubmed.ncbi.nlm.nih.gov/30166318/)) | [GSE109205](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE109205) | 9,710 | 600 | 26,469 |
 
-Drawn with `numpy.random.default_rng(42).choice(n, 600, replace=False)`, sorted —
-`make_test_data.py` reproduces exactly these barcodes. Both are **raw counts**
-(the `_qc` files, not the `_processed` ones, which are log-normalised and would
-silently produce nonsense).
+Both are public, so this validation is re-runnable by anyone from the
+accessions above. The counts in the table are after this project's QC filtering;
+starting from the raw GEO matrices will give slightly different totals, and
+therefore a different 600 cells, so the labels below are reproducible from the
+same `_qc.h5ad` inputs rather than from GEO directly.
+
+Cells are drawn with `numpy.random.default_rng(42).choice(n, 600,
+replace=False)`, sorted — `make_test_data.py` reproduces exactly these barcodes.
+Both inputs are **raw counts** (the `_qc` files, not the `_processed` ones
+beside them, which are log-normalised and would silently produce nonsense).
 
 Each subset is written twice from one source: `.h5ad` for the Python route, and
 a MatrixMarket trio that `build_rds_from_mtx.R` turns into a Seurat `.rds`. The
@@ -61,6 +67,9 @@ the routes would show.
 | anndata | 0.12.10 | 0.13.2 |
 | numpy | 2.2.6 | 2.4.6 |
 | scipy | 1.16.3 | 1.18.0 |
+
+The container column is the package set now pinned in `environment.yml`; the
+full transitive closure, with hashes, is `environment.lock.txt`.
 
 Image: `ghcr.io/kidneyregeneration/dkcc:containerise-v0.5.1`, converted to a
 3.9 GB SIF. The container runs were made under
@@ -240,3 +249,9 @@ Any raw-count h5ad with HGNC gene symbols works in place of the two here.
   routes agree closely, not the exact rate at which they disagree in general.
 - HPC (SLURM/Apptainer) is covered separately in `HPC_TESTING.md` and is not
   included above.
+- **These numbers came from the image built before `rpy2`, `anndata2ri`,
+  `r-sceasy` and `scikit-image` were dropped from `environment.yml`.** None of
+  the four is loaded by `import devkidcc` or referenced by any script here, so
+  the classification path is untouched — but that is an argument, not a
+  measurement. Re-run §6 against the rebuilt image and confirm these figures
+  before tagging a release.

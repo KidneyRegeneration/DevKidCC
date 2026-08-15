@@ -1,28 +1,66 @@
+# Build environment for the DevKidCC container.
+#
+# Versions are pinned to exactly what the validated v0.5.1 image resolved to
+# (examples/VALIDATION.md). Unpinned, a rebuild in six months silently produces
+# a different image from the one the published results came from -- the version
+# skew is not hypothetical, this file previously floated numpy between 2.2 and
+# 2.4 across two builds a fortnight apart.
+#
+# These are the direct dependencies only, so the solver still has room to
+# resolve the transitive set. For byte-exact reconstruction of the published
+# image use environment.lock.txt instead:
+#
+#     micromamba create -n devkid --file environment.lock.txt
+#
+# Bumping a pin here is a deliberate act that requires re-running
+# examples/run_examples.sh before the image is published again.
+
 channels:
   - conda-forge
   - bioconda
 
 dependencies:
-  - python=3.12
-  - r-base=4.4
-  - pip
-  - numpy
-  - pandas
-  - anndata
-  - tqdm
-  - scanpy
-  - rpy2
-  - anndata2ri
-  - scipy
-  - scikit-image
-  - matplotlib
-  - r-seurat
-  - git
-  - r-remotes
+  - python=3.12.13
+  - r-base=4.4.3
+  - pip=26.2.1
+  - git=2.55.0
+
+  # Python: the wrapper's own stack
+  - numpy=2.4.6
+  - pandas=3.0.5
+  - scipy=1.18.0
+  - anndata=0.13.2
+  - scanpy=1.12.3
+  - tqdm=4.70.0
+  # matplotlib and seaborn are imported by the wrapper's plotting module, which
+  # __init__.py loads on `import devkidcc` -- so both are load-bearing, not
+  # optional extras. seaborn was previously undeclared and arrived only as a
+  # scanpy dependency; if scanpy ever drops it, `import devkidcc` breaks.
+  - matplotlib=3.11.1
+  - seaborn=0.13.2
+
+  # R: DevKidCC's own stack
+  - r-seurat=5.5.1
   - r-harmony=1.2.0
-  - r-seurat-disk
-  - r-optparse
-  - r-sceasy
-  # sceasy reads h5ad through Python's anndata via reticulate; pin it explicitly
-  # rather than relying on it arriving as an r-sceasy dependency.
-  - r-reticulate
+  - r-remotes=2.5.0
+  - r-optparse=1.8.2
+  # SeuratDisk::LoadH5Seurat is how docker/run_dkcc.R reads .h5seurat input,
+  # which is one of the formats /opt/dkcc routes to the R side.
+  - r-seurat-disk=0.0.0.9021
+  # Nothing in the image calls reticulate: h5ad is read in Python and the R
+  # script only touches R-native formats. It is pinned because an R package that
+  # loaded reticulate on its own would otherwise provision a fresh interpreter
+  # with uv at runtime, on a cluster node with no network. RETICULATE_PYTHON in
+  # the Dockerfile points it at this environment.
+  - r-reticulate=1.46.0
+
+# Removed at v0.5.1, listed here so their absence reads as a decision:
+#   rpy2, anndata2ri  the wrapper moved to a subprocess/CSV handoff precisely
+#                     because the rpy2 route segfaulted against reticulate.
+#                     `import devkidcc` does not load either one. The legacy
+#                     devkidcc.classifier module still imports rpy2 and will
+#                     now raise ImportError -- that path is abandoned, not
+#                     supported.
+#   r-sceasy          docker/run_dkcc.R no longer converts between h5ad and
+#                     Seurat in either direction; the file picks the stack.
+#   scikit-image      never imported by anything here.
