@@ -22,6 +22,21 @@ suppressPackageStartupMessages({
     library(scCustomize)
 })
 
+# sceasy reads h5ad through Python's anndata via reticulate. Left to itself,
+# reticulate >= 1.41 does not fall back to the system interpreter: finding no
+# configured Python it downloads uv, provisions a fresh CPython, installs only
+# what the calling package declares, and uses that. sceasy declares no anndata,
+# so the conversion lands in an empty environment and fails with
+# ModuleNotFoundError -- having never touched this image's environment at all.
+#
+# The Dockerfile sets RETICULATE_PYTHON, but binding it here too means the script
+# is correct however the caller's environment treats that variable. Outside the
+# container the path is absent and reticulate behaves as it normally would.
+dkcc_python <- Sys.getenv("RETICULATE_PYTHON", "/opt/micromamba/envs/devkid/bin/python")
+if (file.exists(dkcc_python)) {
+    reticulate::use_python(dkcc_python, required = TRUE)
+}
+
 option_list <- list(
     make_option(c("-i", "--input"),  type = "character", help = "Input single-cell file"),
     make_option(c("-o", "--output"), type = "character", help = "Output file path"),
