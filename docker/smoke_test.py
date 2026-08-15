@@ -135,12 +135,24 @@ def check_r_path(adata: ad.AnnData, workdir: Path) -> None:
         capture_output=True,
         text=True,
     )
-    if proc.returncode != 0 or not dst.exists():
+
+    # R's own output goes to the log on *any* failure, not just a non-zero exit.
+    # The script can exit 0 and still hand back an object missing the
+    # classification columns, and swallowing its log in that case cost a full
+    # container rebuild to find out nothing.
+    try:
+        if proc.returncode != 0:
+            raise RuntimeError(f"FAIL [r]: run_dkcc.R exited {proc.returncode}")
+        if not dst.exists():
+            raise RuntimeError(f"FAIL [r]: run_dkcc.R wrote no output at {dst}")
+
+        obs = ad.read_h5ad(dst).obs
+        print(f"  [r] obs columns written: {list(obs.columns)}")
+        check_columns(obs, "r")
+    except Exception:
         sys.stdout.write(proc.stdout)
         sys.stderr.write(proc.stderr)
-        raise RuntimeError(f"FAIL [r]: run_dkcc.R exited {proc.returncode}")
-
-    check_columns(ad.read_h5ad(dst).obs, "r")
+        raise
 
 
 def main() -> int:

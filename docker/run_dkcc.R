@@ -127,7 +127,59 @@ seu <- RunUMAP(seu, dims = 1:30)
 message("Running DevKidCC...")
 seu <- DKCC(seu)
 
+# Check the classification landed before writing. An h5ad that converted cleanly
+# but carries no DKCC/LineageID column is the worst failure mode available here:
+# exit status 0, an output file of the right size, and labels silently absent.
+# Failing here also separates the two causes -- DKCC() not producing the columns
+# versus the h5ad writer dropping them -- which is otherwise indistinguishable
+# from the outside.
+expected_cols <- c("DKCC", "LineageID")
+message("  metadata after DKCC(): ", paste(colnames(seu[[]]), collapse = ", "))
+missing_cols <- setdiff(expected_cols, colnames(seu[[]]))
+if (length(missing_cols) > 0) {
+    stop("DKCC() returned no ", paste(missing_cols, collapse = "/"),
+         " column; classification did not run as expected.")
+}
+
 message("Saving output...")
 write_output(seu, opt$output, opt$format)
+
+# And that they survived the conversion, which is a separate library's problem.
+# scCustomize::as.anndata builds obs itself, and whatever it does with the Seurat
+# metadata it does not reliably carry the classification through -- the columns
+# are demonstrably on the object above and absent from the file below.
+#
+# Rather than depend on that behaviour, write the metadata back over obs from the
+# object we already verified. This runs only when something is missing, so a
+# conversion that already worked is left untouched.
+if (tolower(opt$format) == "h5ad") {
+    anndata <- reticulate::import("anndata")
+    written <- anndata$read_h5ad(opt$output)
+    written_cols <- names(reticulate::py_to_r(written$obs))
+    message("  obs written: ", paste(written_cols, collapse = ", "))
+
+    dropped <- setdiff(expected_cols, written_cols)
+    if (length(dropped) > 0) {
+        message("  h5ad writer dropped ", paste(dropped, collapse = "/"),
+                "; restoring obs from the Seurat object")
+
+        md <- seu[[]]
+        cell_names <- as.character(reticulate::py_to_r(written$obs_names$tolist()))
+        if (!all(cell_names %in% rownames(md))) {
+            stop("Cannot restore obs: cell names in the written h5ad do not match ",
+                 "the Seurat object.")
+        }
+        written$obs <- reticulate::r_to_py(md[cell_names, , drop = FALSE])
+        written$write_h5ad(opt$output)
+
+        recheck <- names(reticulate::py_to_r(anndata$read_h5ad(opt$output)$obs))
+        still_missing <- setdiff(expected_cols, recheck)
+        if (length(still_missing) > 0) {
+            stop("Classification columns ", paste(still_missing, collapse = "/"),
+                 " still absent after restoring obs.")
+        }
+        message("  [OK] obs restored: ", paste(recheck, collapse = ", "))
+    }
+}
 
 message("Done.")
