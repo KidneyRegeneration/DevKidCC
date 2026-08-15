@@ -11,3 +11,7 @@ vignettes
 data.raw
 docs
 _pkgdown.yml
+
+# Python bytecode (docker/smoke_test.py)
+__pycache__/
+*.pyc

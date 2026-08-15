@@ -67,6 +67,21 @@ reticulate: TRUE
 `knn.iter present: FALSE` means the image built the R package from the wrong
 branch — stop here and tell me.
 
+Then run the image's own self-test, which drives a synthetic matrix through both
+the R and the Python entry point. It needs no input file and no network, so it
+works on a login node, and it is the same check CI runs before publishing:
+
+```bash
+singularity exec dkcc-v051.sif python /opt/smoke_test.py
+```
+
+**Expected:** ends with `PASS: both the R and Python entry points classified the
+input.` The `LineageID` lines above it will read `{'unassigned': 200}` — the
+input is noise, so that is the correct answer, and the point of the test is that
+nothing crashed.
+
+If this fails, stop and send me the output; nothing below it will work either.
+
 And confirm the scripts inside the image are the fixed ones:
 
 ```bash

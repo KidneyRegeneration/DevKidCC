@@ -4,7 +4,7 @@
 <!-- badges: start -->
 [![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://www.tidyverse.org/lifecycle/#stable)
 [![Seurat v5](https://img.shields.io/badge/Seurat-v5-blue.svg)](https://satijalab.org/seurat/)
-[![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)](https://github.com/KidneyRegeneration/DevKidCC)
+[![Version](https://img.shields.io/badge/version-0.5.1-blue.svg)](https://github.com/KidneyRegeneration/DevKidCC)
 <!-- badges: end -->
 
 **DevKidCC** (*Dev*eloping *Kid*ney *C*ell *C*lassifier) is a tool that will classify single cell kidney data, both human tissue and human stem cell derived organoids. There is no pre-processing required, although we do recommend filtering out poor quality cells for most accurate representation of cell proportions.
@@ -23,16 +23,27 @@ Genome Medicine: [Wilson et al., 2022](https://genomemedicine.biomedcentral.com/
 
 ## Installation
 
-### Option 1 — Docker (no R installation required)
+### Option 1 — Container (no R or Python installation required)
 
-A pre-built container is available from the GitHub Container Registry. This is the easiest way to run DevKidCC if you don't already have R and Seurat set up.
+A pre-built image is published to the GitHub Container Registry on every commit to the release branches. It carries R, Seurat, scPred and DevKidCC alongside Python, anndata and the `devkidcc` wrapper, so **either language can drive the classifier**.
 
 ```bash
-docker pull ghcr.io/kidneyregeneration/devkidcc:latest
+docker pull ghcr.io/kidneyregeneration/dkcc:latest
+```
 
-# Run on a single file (mount your data directory to /data inside the container)
+Check the image is sound before trusting it with your data. This pushes a synthetic matrix through both entry points and takes about two minutes; it needs no input files and no network:
+
+```bash
+docker run --rm ghcr.io/kidneyregeneration/dkcc:latest python /opt/smoke_test.py
+# ... PASS: both the R and Python entry points classified the input.
+```
+
+**R entry point** — mount your data directory to `/data` inside the container:
+
+```bash
+# Run on a single file
 docker run --rm -v /path/to/your/data:/data \
-    ghcr.io/kidneyregeneration/devkidcc:latest \
+    ghcr.io/kidneyregeneration/dkcc:latest \
     Rscript /opt/run_dkcc.R \
         --input  /data/sample.h5ad \
         --output /data/sample_DKCC.h5ad \
@@ -40,20 +51,39 @@ docker run --rm -v /path/to/your/data:/data \
 
 # Batch process all supported files in a directory
 docker run --rm -v /path/to/your/data:/data \
-    ghcr.io/kidneyregeneration/devkidcc:latest \
+    ghcr.io/kidneyregeneration/dkcc:latest \
     bash /opt/run_dkcc_batch.sh -i /data -o h5ad
 ```
 
 Supported input formats: `.h5ad`, `.h5`, `.h5seurat`, `.rds`, `.RData`  
 Supported output formats: `h5ad`, `rds`
 
-A Singularity/Apptainer image can be built from the same container:
+**Python entry point** — for calling DevKidCC from a scanpy workflow. The wrapper shells out to R for you; `DKCC` and `LineageID` come back as `.obs` columns on your AnnData, at its original gene width:
 
 ```bash
-singularity pull devkidcc.sif docker://ghcr.io/kidneyregeneration/devkidcc:latest
-singularity exec --bind /path/to/data:/data devkidcc.sif \
+docker run --rm -v /path/to/your/data:/data \
+    ghcr.io/kidneyregeneration/dkcc:latest python -c "
+import anndata as ad, devkidcc
+adata = ad.read_h5ad('/data/sample.h5ad')
+adata = devkidcc.classify_kidney_cells(adata)
+print(adata.obs['LineageID'].value_counts())
+adata.write_h5ad('/data/sample_DKCC.h5ad')
+"
+```
+
+Pass raw counts, not log-normalised values — the models were fit against counts, and normalisation happens inside.
+
+**Singularity / Apptainer**, for HPC systems where Docker is unavailable:
+
+```bash
+singularity pull dkcc.sif docker://ghcr.io/kidneyregeneration/dkcc:latest
+singularity exec --bind /path/to/data:/data dkcc.sif \
     Rscript /opt/run_dkcc.R --input /data/sample.h5ad --output /data/sample_DKCC.h5ad
 ```
+
+`run_dkcc.sh` in this repository wraps that call for SLURM clusters — see `HPC_TESTING.md`. Note that Singularity bind-mounts your home directory by default; the image sets `PYTHONNOUSERSITE=1` so a `~/.local` Python install on the host cannot shadow the versions inside it.
+
+The image is built for `linux/amd64`. On Apple Silicon it runs under emulation, slowly.
 
 ### Option 2 — R package (devtools)
 
