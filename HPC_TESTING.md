@@ -7,12 +7,18 @@ under Apptainer/SLURM. Everything below is copy-paste; §7 says what to send bac
 `containerise-v0.5.1` is green, so
 `ghcr.io/kidneyregeneration/dkcc:containerise-v0.5.1` exists.
 
-**What is being tested that wasn't before:** the image is now self-contained.
-Previous runs bind-mounted fixed copies of `run_dkcc.R` / `run_dkcc_batch.sh`
-over the ones inside the SIF. Those fixes are baked in now, and `build_binds()`
-no longer mounts any script. If a step below fails in a way that would once have
-been papered over by a bind-mount, that is the finding — don't re-add the mount,
-send the log.
+**What is being tested that wasn't before:** two things.
+
+1. **The image is self-contained.** Previous runs bind-mounted fixed copies of
+   `run_dkcc.R` / `run_dkcc_batch.sh` over the ones inside the SIF. Those fixes
+   are baked in now, and `build_binds()` no longer mounts any script. If a step
+   below fails in a way that would once have been papered over by a bind-mount,
+   that is the finding — don't re-add the mount, send the log.
+2. **The file now chooses the entry point.** `.h5ad` goes to Python
+   (`/opt/run_dkcc.py`), R-native formats go to R (`/opt/run_dkcc.R`), and
+   `/opt/dkcc` routes on the extension. Previously *everything* went to R, and an
+   h5ad was read by R calling back into Python through reticulate — which is
+   where every h5ad failure in this image came from.
 
 ---
 
@@ -49,9 +55,12 @@ PAT that has `read:packages`.
 singularity exec dkcc-v051.sif Rscript -e '
   cat("DevKidCC:", as.character(packageVersion("DevKidCC")), "\n")
   cat("Seurat  :", as.character(packageVersion("Seurat")), "\n")
-  cat("knn.iter present:", "knn.iter" %in% names(formals(DevKidCC::DKCC)), "\n")
-  cat("sceasy  :", requireNamespace("sceasy", quietly=TRUE), "\n")
-  cat("reticulate:", requireNamespace("reticulate", quietly=TRUE), "\n")'
+  cat("knn.iter present:", "knn.iter" %in% names(formals(DevKidCC::DKCC)), "\n")'
+
+singularity exec dkcc-v051.sif python -c '
+import devkidcc, anndata
+print("wrapper :", devkidcc.__file__)
+print("anndata :", anndata.__version__)'
 ```
 
 **Expected:**
@@ -60,33 +69,40 @@ singularity exec dkcc-v051.sif Rscript -e '
 DevKidCC: 0.5.1
 Seurat  : 5.x.x
 knn.iter present: TRUE
-sceasy  : TRUE
-reticulate: TRUE
+wrapper : /opt/micromamba/envs/devkid/lib/python3.12/site-packages/devkidcc/__init__.py
+anndata : 0.x.x
 ```
 
 `knn.iter present: FALSE` means the image built the R package from the wrong
 branch — stop here and tell me.
 
-Then run the image's own self-test, which drives a synthetic matrix through both
-the R and the Python entry point. It needs no input file and no network, so it
-works on a login node, and it is the same check CI runs before publishing:
+Then run the image's own self-test, which drives a synthetic matrix through the
+Python API, an h5ad through `/opt/dkcc` (asserting it routes to Python) and an
+`.rds` through `/opt/dkcc` (asserting it routes to R). It needs no input file and
+no network, so it works on a login node, and it is the same check CI runs before
+publishing:
 
 ```bash
 singularity exec dkcc-v051.sif python /opt/smoke_test.py
 ```
 
-**Expected:** ends with `PASS: both the R and Python entry points classified the
-input.` The `LineageID` lines above it will read `{'unassigned': 200}` — the
-input is noise, so that is the correct answer, and the point of the test is that
-nothing crashed.
+**Expected:** ends with `PASS: the Python API, h5ad routing and .rds routing all
+classified the input.` The `LineageID` lines above it will read
+`{'unassigned': 200}` — the input is noise, so that is the correct answer, and
+the point of the test is that nothing crashed. Takes about three minutes.
 
 If this fails, stop and send me the output; nothing below it will work either.
 
 And confirm the scripts inside the image are the fixed ones:
 
 ```bash
-# reads h5ad via sceasy rather than the silently-failing SeuratDisk::Convert
-singularity exec dkcc-v051.sif grep -c sceasy /opt/run_dkcc.R              # expect 4
+# the R script no longer reads or writes h5ad at all: no sceasy, no reticulate,
+# no scCustomize::as.anndata — that work belongs to Python now
+singularity exec dkcc-v051.sif \
+    grep -c 'library(sceasy)\|convertFormat\|as\.anndata(' /opt/run_dkcc.R  # expect 0
+
+# and the routing exists, with a Python side to route to
+singularity exec dkcc-v051.sif ls -l /opt/dkcc /opt/run_dkcc.py
 
 # the runtime DKCC() rewrite is gone — the only remaining hit is the comment
 # explaining that it used to be there, so no *code* line may match
@@ -95,6 +111,15 @@ singularity exec dkcc-v051.sif \
 
 # batch mode enumerates up front instead of reprocessing its own outputs
 singularity exec dkcc-v051.sif grep -c mapfile /opt/run_dkcc_batch.sh      # expect 1
+```
+
+Routing is worth one direct check too, since a regression here would still
+classify and so would look like a pass everywhere else:
+
+```bash
+singularity exec dkcc-v051.sif /opt/dkcc --input /tmp/x.h5ad --output /tmp/y.h5ad 2>&1 | head -1
+# expect: Routing to the Python entry point (.h5ad is AnnData's format)
+# (it then fails on the missing file — that is fine, the routing line is the point)
 ```
 
 ## 4. Get a test file across
@@ -131,7 +156,13 @@ cd dkcc-repo
 ```
 
 5,365 cells took ~90 s on the homeserver, so `prod_short` with 32 G is generous.
-Scale `--mem` up for larger inputs; the h5ad path holds the whole matrix in R.
+Scale `--mem` up for larger inputs. An h5ad input goes through the Python
+wrapper, which projects onto the reference genes before handing the counts to R,
+so it holds rather less in R than the old all-R path did.
+
+`--format` no longer takes a value that contradicts the input: h5ad in gives
+h5ad out, an R-native file gives `.rds` out. Passing a mismatched `--format` is
+now an error rather than a silent conversion.
 
 Watch it:
 
@@ -179,9 +210,10 @@ print(a.obs['DKCC'].value_counts().head(10))
 | Endo | 3 |
 
 Near-identical is the pass condition, not bit-identical: the container pins
-`r-base=4.4` against the host's R 4.5.3, and the container path reads the h5ad
-through sceasy rather than the wrapper's CSV handoff. A few dozen cells moving is
-fine; whole classes appearing or vanishing is not.
+`r-base=4.4` against the host's R 4.5.3. Both now reach R the same way — the h5ad
+goes through the Python wrapper's CSV handoff on either machine — so the R
+version is the only remaining source of drift. A few dozen cells moving is fine;
+whole classes appearing or vanishing is not.
 
 ## 7. Batch mode (optional but worth it)
 

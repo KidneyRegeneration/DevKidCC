@@ -31,34 +31,42 @@ A pre-built image is published to the GitHub Container Registry on every commit 
 docker pull ghcr.io/kidneyregeneration/dkcc:latest
 ```
 
-Check the image is sound before trusting it with your data. This pushes a synthetic matrix through both entry points and takes about two minutes; it needs no input files and no network:
+Check the image is sound before trusting it with your data. This pushes a synthetic matrix through every entry point and takes about three minutes; it needs no input files and no network:
 
 ```bash
 docker run --rm ghcr.io/kidneyregeneration/dkcc:latest python /opt/smoke_test.py
-# ... PASS: both the R and Python entry points classified the input.
+# ... PASS: the Python API, h5ad routing and .rds routing all classified the input.
 ```
 
-**R entry point** — mount your data directory to `/data` inside the container:
+**The file chooses the entry point.** `.h5ad` is AnnData's format and is read and written by Python; `.rds`, `.RData`, `.h5seurat` and 10x `.h5` are read and written by Seurat. `/opt/dkcc` routes on the extension, so you do not have to:
 
 ```bash
-# Run on a single file
+# h5ad in, h5ad out -- goes to Python
 docker run --rm -v /path/to/your/data:/data \
     ghcr.io/kidneyregeneration/dkcc:latest \
-    Rscript /opt/run_dkcc.R \
-        --input  /data/sample.h5ad \
-        --output /data/sample_DKCC.h5ad \
-        --format h5ad
+    /opt/dkcc --input /data/sample.h5ad --output /data/sample_DKCC.h5ad
 
-# Batch process all supported files in a directory
+# rds in, rds out -- goes to R
 docker run --rm -v /path/to/your/data:/data \
     ghcr.io/kidneyregeneration/dkcc:latest \
-    bash /opt/run_dkcc_batch.sh -i /data -o h5ad
+    /opt/dkcc --input /data/sample.rds --output /data/sample_DKCC.rds
+
+# Batch: every supported file in a directory, each routed by its own extension
+docker run --rm -v /path/to/your/data:/data \
+    ghcr.io/kidneyregeneration/dkcc:latest \
+    bash /opt/run_dkcc_batch.sh -i /data
 ```
 
-Supported input formats: `.h5ad`, `.h5`, `.h5seurat`, `.rds`, `.RData`  
-Supported output formats: `h5ad`, `rds`
+Both routes end in the same `DevKidCC::DKCC()`; what differs is only which side reads the file. The image does **not** convert between h5ad and Seurat formats — use `sceasy` or `zellkonverter` yourself if you need that.
 
-**Python entry point** — for calling DevKidCC from a scanpy workflow. The wrapper shells out to R for you; `DKCC` and `LineageID` come back as `.obs` columns on your AnnData, at its original gene width:
+| Input | Entry point | Output |
+|---|---|---|
+| `.h5ad` | `/opt/run_dkcc.py` (Python) | `.h5ad` |
+| `.rds` `.RData` `.h5seurat` `.h5` | `/opt/run_dkcc.R` (R) | `.rds` |
+
+Either script can also be called directly, with its own options — `--threshold`, `--max-iter`, `--knn-iter` on the Python side; `Rscript /opt/run_dkcc.R --help` on the R side.
+
+**From a scanpy workflow**, skip the CLI and import the wrapper. It shells out to R for you; `DKCC` and `LineageID` come back as `.obs` columns on your AnnData, at its original gene width:
 
 ```bash
 docker run --rm -v /path/to/your/data:/data \
@@ -78,7 +86,7 @@ Pass raw counts, not log-normalised values — the models were fit against count
 ```bash
 singularity pull dkcc.sif docker://ghcr.io/kidneyregeneration/dkcc:latest
 singularity exec --bind /path/to/data:/data dkcc.sif \
-    Rscript /opt/run_dkcc.R --input /data/sample.h5ad --output /data/sample_DKCC.h5ad
+    /opt/dkcc --input /data/sample.h5ad --output /data/sample_DKCC.h5ad
 ```
 
 `run_dkcc.sh` in this repository wraps that call for SLURM clusters — see `HPC_TESTING.md`. Note that Singularity bind-mounts your home directory by default; the image sets `PYTHONNOUSERSITE=1` so a `~/.local` Python install on the host cannot shadow the versions inside it.

@@ -6,7 +6,10 @@
 #   ./run_dkcc.sh [OPTIONS] <input_file_or_folder>
 #
 # Options:
-#   -f, --format      Output format: h5ad | rds              [default: h5ad]
+#   -f, --format      Output format: h5ad | rds     [default: follows the input]
+#                     h5ad in gives h5ad out (Python entry point); an R-native
+#                     input gives rds out. Passing a format that contradicts the
+#                     input is an error rather than a silent conversion.
 #   -c, --container   remote | <path/to/image.sif>           [default: remote]
 #                       remote       = pull ghcr.io/kidneyregeneration/dkcc:latest
 #                       <path.sif>   = use an existing local .sif file
@@ -41,7 +44,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 REMOTE_URI="ghcr.io/kidneyregeneration/dkcc:latest"
 
-FORMAT="h5ad"
+FORMAT=""
 CONTAINER_OPT="remote"
 MODE="local"
 SIF="${SCRIPT_DIR}/dkcc.sif"
@@ -101,7 +104,7 @@ INPUT=$(realpath "$INPUT")
 # Validate
 # ---------------------------------------------------------------------------
 
-if [[ "$FORMAT" != "h5ad" && "$FORMAT" != "rds" ]]; then
+if [[ -n "$FORMAT" && "$FORMAT" != "h5ad" && "$FORMAT" != "rds" ]]; then
     echo "ERROR: --format must be h5ad or rds (got: $FORMAT)"
     exit 1
 fi
@@ -148,6 +151,21 @@ ensure_sif() {
 # Resolve inner container command from input path
 # ---------------------------------------------------------------------------
 
+# The file decides which entry point runs, and the entry point decides the
+# output format: .h5ad is read and written by Python's anndata, everything else
+# by Seurat. Converting between the two used to happen inside the R script, via
+# reticulate, and that conversion is where every h5ad bug in this image lived.
+format_for_input() {
+    local ext="${1##*.}"
+    case "${ext,,}" in
+        h5ad)                    echo "h5ad" ;;
+        rds|rdata|h5seurat|h5)   echo "rds" ;;
+        *) echo "ERROR: unsupported input extension '.${ext}'" >&2
+           echo "       Supported: .h5ad .rds .RData .h5seurat .h5" >&2
+           exit 1 ;;
+    esac
+}
+
 if [[ -f "$INPUT" ]]; then
     DATA_DIR=$(dirname "$INPUT")
     BASE=$(basename "$INPUT")
@@ -160,16 +178,33 @@ if [[ -f "$INPUT" ]]; then
         *)          STEM="${BASE%.*}" ;;
     esac
 
-    INNER_CMD="Rscript /opt/run_dkcc.R \
+    NATIVE_FORMAT=$(format_for_input "$BASE")
+    if [[ -n "$FORMAT" && "$FORMAT" != "$NATIVE_FORMAT" ]]; then
+        echo "ERROR: --format $FORMAT does not match the input."
+        echo "       ${BASE} is handled by the $([[ $NATIVE_FORMAT == h5ad ]] && echo Python || echo R) entry point,"
+        echo "       which writes ${NATIVE_FORMAT}. Convert the file yourself if you need the other format."
+        exit 1
+    fi
+    FORMAT="$NATIVE_FORMAT"
+
+    # /opt/dkcc routes on the input extension: h5ad to run_dkcc.py, R-native
+    # formats to run_dkcc.R.
+    INNER_CMD="/opt/dkcc \
         --input  /data/${BASE} \
-        --output /data/${STEM}_DKCC.${FORMAT} \
-        --format ${FORMAT}"
+        --output /data/${STEM}_DKCC.${FORMAT}"
 
     [[ -z "$JOB_NAME" ]] && JOB_NAME="dkcc_${STEM}"
 
 elif [[ -d "$INPUT" ]]; then
     DATA_DIR="$INPUT"
-    INNER_CMD="bash /opt/run_dkcc_batch.sh -i /data -o ${FORMAT}"
+    # Batch mode routes per file, so a folder may hold a mix of formats; a
+    # single --format for the whole folder no longer means anything.
+    if [[ -n "$FORMAT" ]]; then
+        echo "NOTE: --format is ignored for folders; each file's output format"
+        echo "      follows its own input format."
+    fi
+    INNER_CMD="bash /opt/run_dkcc_batch.sh -i /data"
+    FORMAT="per-file"
 
     [[ -z "$JOB_NAME" ]] && JOB_NAME="dkcc_batch_$(basename "$INPUT")"
 
@@ -221,7 +256,7 @@ run_local() {
 
     echo "Running DevKidCC locally via Singularity"
     echo "  Input  : $INPUT"
-    echo "  Format : $FORMAT"
+    echo "  Format : $FORMAT (follows the input)"
     echo "  Image  : $SIF"
     echo "  Mounts : /data (data dir), ${MOUNTS}"
     echo ""
@@ -283,7 +318,7 @@ SBATCH
 
     echo "Submitting SLURM job: $JOB_NAME"
     echo "  Input     : $INPUT"
-    echo "  Format    : $FORMAT"
+    echo "  Format    : $FORMAT (follows the input)"
     echo "  Image     : $SIF"
     echo "  Partition : $PARTITION"
     echo "  Memory    : $MEM"

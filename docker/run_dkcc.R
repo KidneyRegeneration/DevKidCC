@@ -1,47 +1,33 @@
 #!/usr/bin/env Rscript
 
-# Read single-cell files into Seurat, run DevKidCC::DKCC(),
-# and save back out as h5ad or RDS.
+# Read an R-native single-cell file into Seurat, run DevKidCC::DKCC(),
+# and save it back out as RDS.
 #
-# Supported input:  .h5ad  .h5  .h5seurat  .rds  .RData
-# Supported output: .h5ad  .rds
+# Supported input:  .h5  .h5seurat  .rds  .RData
+# Supported output: .rds
+#
+# h5ad is deliberately not here. It is AnnData's format, this image contains
+# anndata, and reading it from R meant calling back out to Python through
+# reticulate and converting in both directions -- which is where every h5ad bug
+# in this image has come from. h5ad now goes to /opt/run_dkcc.py; /opt/dkcc
+# routes by extension so callers need not choose.
 #
 # Usage:
 #   Rscript /opt/run_dkcc.R \
-#       --input sample.h5ad \
-#       --output sample_DKCC.h5ad \
-#       --format h5ad
+#       --input sample.rds \
+#       --output sample_DKCC.rds
 
 suppressPackageStartupMessages({
     library(optparse)
     library(Seurat)
-    library(SeuratDisk)
-    library(sceasy)
-    library(reticulate)
     library(DevKidCC)
-    library(scCustomize)
 })
-
-# sceasy reads h5ad through Python's anndata via reticulate. Left to itself,
-# reticulate >= 1.41 does not fall back to the system interpreter: finding no
-# configured Python it downloads uv, provisions a fresh CPython, installs only
-# what the calling package declares, and uses that. sceasy declares no anndata,
-# so the conversion lands in an empty environment and fails with
-# ModuleNotFoundError -- having never touched this image's environment at all.
-#
-# The Dockerfile sets RETICULATE_PYTHON, but binding it here too means the script
-# is correct however the caller's environment treats that variable. Outside the
-# container the path is absent and reticulate behaves as it normally would.
-dkcc_python <- Sys.getenv("RETICULATE_PYTHON", "/opt/micromamba/envs/devkid/bin/python")
-if (file.exists(dkcc_python)) {
-    reticulate::use_python(dkcc_python, required = TRUE)
-}
 
 option_list <- list(
     make_option(c("-i", "--input"),  type = "character", help = "Input single-cell file"),
     make_option(c("-o", "--output"), type = "character", help = "Output file path"),
-    make_option(c("-f", "--format"), type = "character", default = "h5ad",
-                help = "Output format: h5ad or rds [default = %default]")
+    make_option(c("-f", "--format"), type = "character", default = "rds",
+                help = "Output format: rds [default = %default]")
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
@@ -67,21 +53,20 @@ read_input <- function(path) {
     message("Reading input: ", path)
 
     if (ext == "h5ad") {
-        # SeuratDisk::Convert() can't parse the modern AnnData HDF5 schema
-        # (encoding-type/encoding-version attrs from anndata>=0.8 / scanpy>=1.9)
-        # and silently produces no output. sceasy reads the file via Python's
-        # own anndata module (through reticulate) instead, which handles the
-        # modern schema natively.
-        obj <- sceasy::convertFormat(path, from = "anndata", to = "seurat", main_layer = "counts")
-        # sceasy always builds a legacy (v4) Assay. DKCC() branches on
-        # inherits(assay, "Assay5"): when it's not, DKCC() rebuilds the
-        # Seurat object from scratch via CreateSeuratObject(), silently
-        # dropping any reductions (PCA/UMAP) computed upstream. Converting
-        # to Assay5 here makes DKCC() take its layer-joining branch instead,
-        # which preserves them.
-        obj[["RNA"]] <- as(object = obj[["RNA"]], Class = "Assay5")
+        # h5ad is AnnData's format and this image reads it in Python, where it
+        # is a plain file read rather than a reticulate round trip back out of
+        # R. /opt/dkcc routes by extension; this branch exists to say so rather
+        # than fail obscurely for anyone calling the R script directly.
+        stop("h5ad input is handled by the Python entry point, not this script.\n",
+             "  Use:  python /opt/run_dkcc.py --input ", path, " --output <out.h5ad>\n",
+             "  Or:   /opt/dkcc --input ", path, " --output <out.h5ad>   (routes by extension)")
     } else if (ext == "h5seurat") {
-        obj <- LoadH5Seurat(path)
+        # Required only for this branch, so it is loaded here rather than up
+        # front: every other format works on an R install without it.
+        if (!requireNamespace("SeuratDisk", quietly = TRUE)) {
+            stop("Reading .h5seurat needs the SeuratDisk package, which is not installed.")
+        }
+        obj <- SeuratDisk::LoadH5Seurat(path)
     } else if (ext == "h5") {
         obj <- CreateSeuratObject(counts = Read10X_h5(path))
     } else if (ext == "rds") {
@@ -101,11 +86,12 @@ write_output <- function(obj, out_path, out_format) {
     if (out_format == "rds") {
         saveRDS(obj, out_path)
     } else if (out_format == "h5ad") {
-        obj@misc  <- list()
-        obj@tools <- list()
-        as.anndata(x = obj, file_path = dirname(out_path), file_name = basename(out_path))
+        stop("h5ad output is handled by the Python entry point, not this script.\n",
+             "  scCustomize::as.anndata built obs itself and silently dropped the\n",
+             "  classification columns; writing through anndata avoids the conversion\n",
+             "  entirely. Use /opt/run_dkcc.py, or --format rds here.")
     } else {
-        stop("Output format must be 'h5ad' or 'rds'")
+        stop("Output format must be 'rds' (h5ad goes through /opt/run_dkcc.py)")
     }
 }
 
@@ -143,43 +129,5 @@ if (length(missing_cols) > 0) {
 
 message("Saving output...")
 write_output(seu, opt$output, opt$format)
-
-# And that they survived the conversion, which is a separate library's problem.
-# scCustomize::as.anndata builds obs itself, and whatever it does with the Seurat
-# metadata it does not reliably carry the classification through -- the columns
-# are demonstrably on the object above and absent from the file below.
-#
-# Rather than depend on that behaviour, write the metadata back over obs from the
-# object we already verified. This runs only when something is missing, so a
-# conversion that already worked is left untouched.
-if (tolower(opt$format) == "h5ad") {
-    anndata <- reticulate::import("anndata")
-    written <- anndata$read_h5ad(opt$output)
-    written_cols <- names(reticulate::py_to_r(written$obs))
-    message("  obs written: ", paste(written_cols, collapse = ", "))
-
-    dropped <- setdiff(expected_cols, written_cols)
-    if (length(dropped) > 0) {
-        message("  h5ad writer dropped ", paste(dropped, collapse = "/"),
-                "; restoring obs from the Seurat object")
-
-        md <- seu[[]]
-        cell_names <- as.character(reticulate::py_to_r(written$obs_names$tolist()))
-        if (!all(cell_names %in% rownames(md))) {
-            stop("Cannot restore obs: cell names in the written h5ad do not match ",
-                 "the Seurat object.")
-        }
-        written$obs <- reticulate::r_to_py(md[cell_names, , drop = FALSE])
-        written$write_h5ad(opt$output)
-
-        recheck <- names(reticulate::py_to_r(anndata$read_h5ad(opt$output)$obs))
-        still_missing <- setdiff(expected_cols, recheck)
-        if (length(still_missing) > 0) {
-            stop("Classification columns ", paste(still_missing, collapse = "/"),
-                 " still absent after restoring obs.")
-        }
-        message("  [OK] obs restored: ", paste(recheck, collapse = ", "))
-    }
-}
 
 message("Done.")
