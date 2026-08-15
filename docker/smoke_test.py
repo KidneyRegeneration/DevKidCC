@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import traceback
 import tempfile
 from pathlib import Path
 
@@ -59,11 +60,11 @@ def reference_genes() -> list[str]:
 
     path = Path(devkidcc.__file__).parent / "data" / "reference_genes.txt"
     if not path.exists():
-        raise SystemExit(f"FAIL: packaged reference gene list missing at {path}")
+        raise RuntimeError(f"FAIL: packaged reference gene list missing at {path}")
 
     genes = [line.strip() for line in path.read_text().splitlines() if line.strip()]
     if len(genes) < N_GENES:
-        raise SystemExit(f"FAIL: only {len(genes)} reference genes, need {N_GENES}")
+        raise RuntimeError(f"FAIL: only {len(genes)} reference genes, need {N_GENES}")
     return genes[:N_GENES]
 
 
@@ -92,12 +93,12 @@ def synthetic_adata(genes: list[str]) -> ad.AnnData:
 def check_columns(obs: pd.DataFrame, label: str) -> None:
     missing = [c for c in REQUIRED_COLUMNS if c not in obs.columns]
     if missing:
-        raise SystemExit(f"FAIL [{label}]: missing column(s) {missing}")
+        raise RuntimeError(f"FAIL [{label}]: missing column(s) {missing}")
 
     for col in REQUIRED_COLUMNS:
         n_null = obs[col].isna().sum()
         if n_null:
-            raise SystemExit(f"FAIL [{label}]: {col} is null for {n_null} cells")
+            raise RuntimeError(f"FAIL [{label}]: {col} is null for {n_null} cells")
 
     counts = obs["LineageID"].value_counts()
     print(f"  [{label}] LineageID: {counts.to_dict()}")
@@ -113,7 +114,7 @@ def check_python_path(adata: ad.AnnData) -> None:
     # The wrapper projects onto the reference genes before handing off to R; the
     # object it returns must still be the caller's, at full width.
     if result.n_vars != adata.n_vars:
-        raise SystemExit(
+        raise RuntimeError(
             f"FAIL [python]: returned {result.n_vars} genes, input had {adata.n_vars} "
             "-- the reference-gene projection leaked into the caller's object"
         )
@@ -123,7 +124,7 @@ def check_python_path(adata: ad.AnnData) -> None:
 def check_r_path(adata: ad.AnnData, workdir: Path) -> None:
     print(f"R path: Rscript {R_SCRIPT}")
     if not R_SCRIPT.exists():
-        raise SystemExit(f"FAIL [r]: {R_SCRIPT} not in the image")
+        raise RuntimeError(f"FAIL [r]: {R_SCRIPT} not in the image")
 
     src = workdir / "smoke_in.h5ad"
     dst = workdir / "smoke_out.h5ad"
@@ -137,7 +138,7 @@ def check_r_path(adata: ad.AnnData, workdir: Path) -> None:
     if proc.returncode != 0 or not dst.exists():
         sys.stdout.write(proc.stdout)
         sys.stderr.write(proc.stderr)
-        raise SystemExit(f"FAIL [r]: run_dkcc.R exited {proc.returncode}")
+        raise RuntimeError(f"FAIL [r]: run_dkcc.R exited {proc.returncode}")
 
     check_columns(ad.read_h5ad(dst).obs, "r")
 
@@ -147,13 +148,28 @@ def main() -> int:
     genes = reference_genes()
     adata = synthetic_adata(genes)
 
+    # Both paths run even when the first fails. Each CI round trip costs a
+    # container build, so one run should report everything that is broken rather
+    # than the first thing that is.
+    failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="dkcc_smoke_") as tmp:
         workdir = Path(tmp)
-        check_python_path(adata.copy())
-        print()
-        check_r_path(adata.copy(), workdir)
+        for label, run in (
+            ("python", lambda: check_python_path(adata.copy())),
+            ("r", lambda: check_r_path(adata.copy(), workdir)),
+        ):
+            try:
+                run()
+            except Exception:
+                traceback.print_exc()
+                failures.append(label)
+            print()
 
-    print("\nPASS: both the R and Python entry points classified the input.")
+    if failures:
+        print(f"FAIL: {', '.join(failures)} entry point(s) did not classify the input.")
+        return 1
+
+    print("PASS: both the R and Python entry points classified the input.")
     return 0
 
 
