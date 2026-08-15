@@ -101,10 +101,14 @@ The image carries `/opt/examples`, the same scripts as the `examples/` directory
 |---|---|
 | `classify_h5ad.py` | Classifying an AnnData object from Python, with a label-count summary |
 | `classify_seurat.R` | The same from R — including normalising a Seurat v5 object first, which `DKCC()` does not do for you |
+| `make_test_data.py` | Building the two small test inputs, seeded so they reproduce exactly |
 | `build_rds_from_mtx.R` | Building a Seurat `.rds` from a MatrixMarket trio, so both routes can be fed from one source matrix |
 | `export_labels.R` | Dumping per-cell labels to CSV |
 | `compare_routes.py` | Agreement between the Python and R routes, cell by cell |
+| `compare_host_container.py` | Agreement between two environments — the container against your own machine |
 | `run_examples.sh` | All of the above over a set of datasets, with a pass/fail summary |
+
+`examples/VALIDATION.md` is the v0.5.1 validation record: all four paths on two datasets, the agreement between the routes (κ 0.94–0.99), and the agreement between container and host (identical, cell for cell).
 
 ```bash
 singularity exec --bind $PWD:/data dkcc.sif \
