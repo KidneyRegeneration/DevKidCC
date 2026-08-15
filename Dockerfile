@@ -117,5 +117,10 @@ COPY docker/run_dkcc_batch.sh /opt/run_dkcc_batch.sh
 COPY docker/smoke_test.py /opt/smoke_test.py
 RUN chmod +x /opt/dkcc /opt/run_dkcc.py /opt/run_dkcc.R /opt/run_dkcc_batch.sh /opt/smoke_test.py
 
+# The worked examples ship inside the image so a user who pulls it can run a
+# complete classification without also cloning the repository.
+COPY examples/ /opt/examples/
+RUN chmod +x /opt/examples/*.py /opt/examples/*.R /opt/examples/*.sh
+
 WORKDIR /data
 CMD ["/bin/bash"]

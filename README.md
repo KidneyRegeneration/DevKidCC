@@ -93,6 +93,26 @@ singularity exec --bind /path/to/data:/data dkcc.sif \
 
 The image is built for `linux/amd64`. On Apple Silicon it runs under emulation, slowly.
 
+#### Worked examples
+
+The image carries `/opt/examples`, the same scripts as the `examples/` directory here. They are the CLI calls above written out step by step, with the checks and the label summary spelled out, so they can be read, adapted, or lifted into a methods section:
+
+| Script | What it shows |
+|---|---|
+| `classify_h5ad.py` | Classifying an AnnData object from Python, with a label-count summary |
+| `classify_seurat.R` | The same from R — including normalising a Seurat v5 object first, which `DKCC()` does not do for you |
+| `build_rds_from_mtx.R` | Building a Seurat `.rds` from a MatrixMarket trio, so both routes can be fed from one source matrix |
+| `export_labels.R` | Dumping per-cell labels to CSV |
+| `compare_routes.py` | Agreement between the Python and R routes, cell by cell |
+| `run_examples.sh` | All of the above over a set of datasets, with a pass/fail summary |
+
+```bash
+singularity exec --bind $PWD:/data dkcc.sif \
+    python /opt/examples/classify_h5ad.py --input /data/sample.h5ad \
+                                          --output /data/sample_DKCC.h5ad \
+                                          --summary /data/sample_labels.csv
+```
+
 ### Option 2 — R package (devtools)
 
 You can install **DevKidCC** from this repository using devtools: 
