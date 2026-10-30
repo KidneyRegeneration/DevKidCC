@@ -16,6 +16,24 @@
 
 DKCC <- function(seurat, threshold = 0.7, max.iter = 1, knn.iter = 20) {
 
+  # scPred aligns every query to the reference with harmony::HarmonyMatrix(...,
+  # reference_values = "reference", max.iter.harmony = max.iter). harmony >= 1.0
+  # silently drops reference_values (the reference is moved too) and ignores
+  # max.iter.harmony (10 rounds, not max.iter), and its core algorithm changed, so
+  # the same cells get different calls. With harmony 0.1.1 this function reproduces
+  # the original DevKidCC (v0.3.0, Seurat 4) cell for cell; with harmony 1.2.4,
+  # 16-18% of calls differ (Howden 2019, 2026-10-04). Refuse to run on anything else.
+  harmony_version <- utils::packageVersion("harmony")
+  if (harmony_version != "0.1.1") {
+    stop("DKCC() requires harmony 0.1.1, found ", harmony_version, " at ",
+         find.package("harmony"), ".\n",
+         "harmony >= 1.0 changes how scPred aligns cells to the reference and so changes ",
+         "the classification. Install the pinned version into a library ahead of it:\n",
+         "  install.packages('https://cran.r-project.org/src/contrib/Archive/harmony/",
+         "harmony_0.1.1.tar.gz', repos = NULL, type = 'source', lib = '<lib>')\n",
+         "and put <lib> first, e.g. R_LIBS=<lib>.", call. = FALSE)
+  }
+
   if (("dkcc" %in% colnames(seurat[[]])) == FALSE){
     seurat@misc$old.meta <- seurat[[]]
   } else {
@@ -269,9 +287,8 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1, knn.iter = 20) {
     } else {
       # PAX2 was dropped by the zero-variance filter above -- common when a small
       # chunk of NPC cells expresses no PAX2 at all. Every cluster is then
-      # PAX2-null by definition, which is what the else branch below concludes
-      # anyway; treating them all as NPC-like keeps that behaviour instead of
-      # erroring out inside GeneSummary().
+      # PAX2-null by definition, so all of them go through the NPC-like branch
+      # below, instead of erroring out inside GeneSummary().
       message("PAX2 not present in NPC subset (zero variance in this chunk) - treating all NPC clusters as NPC-like")
       pax2null <- levels(factor(as.character(npcs$RNA_snn_res.0.5)))
     }
@@ -281,7 +298,11 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1, knn.iter = 20) {
       seurat[[]] <- within(seurat[[]], LineageID[LineageID %in% c('NPC') & rownames(seurat[[]]) %in% names] <- 'NPC-like')
       seurat[[]] <- within(seurat[[]], DKCC[DKCC %in% c('NPC') & rownames(seurat[[]]) %in% names] <- 'NPC-like')
     } else {
-      seurat[[]] <- within(seurat[[]], DKCC[DKCC %in% c('NPC')] <- 'NPC-like')
+      # Every NPC cluster has PAX2 in >= 33% of its cells: none is NPC-like, so
+      # the NPC calls stand. (Previously this branch relabelled every NPC as
+      # NPC-like, the reverse of the rule, which emptied the NPC class in fetal
+      # kidney, where cap mesenchyme expresses PAX2.)
+      message("All NPC clusters express PAX2 - keeping NPC calls")
     }
 
     seurat@misc$NPC.seu <- npcs
