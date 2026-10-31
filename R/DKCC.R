@@ -16,6 +16,24 @@
 
 DKCC <- function(seurat, threshold = 0.7, max.iter = 1, knn.iter = 20) {
 
+  # scPred aligns every query to the reference with harmony::HarmonyMatrix(...,
+  # reference_values = "reference", max.iter.harmony = max.iter). harmony >= 1.0
+  # silently drops reference_values (the reference is moved too) and ignores
+  # max.iter.harmony (10 rounds, not max.iter), and its core algorithm changed, so
+  # the same cells get different calls. With harmony 0.1.1 this function reproduces
+  # the original DevKidCC (v0.3.0, Seurat 4) cell for cell; with harmony 1.2.4,
+  # 16-18% of calls differ (Howden 2019, 2026-10-04). Refuse to run on anything else.
+  harmony_version <- utils::packageVersion("harmony")
+  if (harmony_version != "0.1.1") {
+    stop("DKCC() requires harmony 0.1.1, found ", harmony_version, " at ",
+         find.package("harmony"), ".\n",
+         "harmony >= 1.0 changes how scPred aligns cells to the reference and so changes ",
+         "the classification. Install the pinned version into a library ahead of it:\n",
+         "  install.packages('https://cran.r-project.org/src/contrib/Archive/harmony/",
+         "harmony_0.1.1.tar.gz', repos = NULL, type = 'source', lib = '<lib>')\n",
+         "and put <lib> first, e.g. R_LIBS=<lib>.", call. = FALSE)
+  }
+
   if (("dkcc" %in% colnames(seurat[[]])) == FALSE){
     seurat@misc$old.meta <- seurat[[]]
   } else {
@@ -130,14 +148,69 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1, knn.iter = 20) {
     message("KNN smoothing disabled (knn.iter = 0).")
   }
 
-  dkcc <- seurat[[]] %>% rownames_to_column("cell") %>% filter(LineageID %in% c("unassigned", "NPC", "Endo")) %>% transmute(cell = cell, dkcc = LineageID)
+  # NPC refinement, on LineageID: PAX2-low NPC clusters (or every NPC, when there are
+  # too few to cluster) are NPC-like. It runs before the tier-2 steps so that LineageID
+  # carries the call and DKCC inherits it, rather than DKCC being patched afterwards.
+  npc_count <- sum(seurat$LineageID == "NPC", na.rm = TRUE)
+
+  if (npc_count > 2) {
+    message("Refining NPC classification (", npc_count, " NPC cells)...")
+    npcs <- seurat[, which(seurat$LineageID == "NPC")]
+    DefaultAssay(npcs) <- "RNA"
+    npcs <- npcs %>% NormalizeData() %>% FindVariableFeatures() %>% ScaleData()
+    npcs$RNA_snn_res.0.5 <- 0
+
+    if (ncol(npcs) > 50) {
+      npcs <- npcs %>%
+        RunPCA(npcs = 20) %>% RunUMAP(dims = 1:20) %>% FindNeighbors() %>% FindClusters(resolution = 0.5)
+    }
+
+    # 'orig.ident' may be absent for objects that arrived as h5ad. Its only use is
+    # to populate 'Identity', which nothing downstream reads -- the very next line
+    # replaces orig.ident with "all" for GeneSummary()'s grouping -- so guard
+    # rather than require it.
+    npcs$Identity <- if ("orig.ident" %in% colnames(npcs[[]])) npcs$orig.ident else NA_character_
+    npcs$orig.ident <- "all"
+
+    if ("PAX2" %in% rownames(npcs)) {
+      markers <- DevKidCC::GeneSummary(npcs, identity = "orig.ident", split.by = "RNA_snn_res.0.5", features = c("PAX2"))
+      pax2null <- (markers %>% filter(pct.exp < 33))$Component
+    } else {
+      # PAX2 was dropped by the zero-variance filter above -- common when a small
+      # chunk of NPC cells expresses no PAX2 at all. Every cluster is then
+      # PAX2-null by definition, so all of them go through the NPC-like branch
+      # below, instead of erroring out inside GeneSummary().
+      message("PAX2 not present in NPC subset (zero variance in this chunk) - treating all NPC clusters as NPC-like")
+      pax2null <- levels(factor(as.character(npcs$RNA_snn_res.0.5)))
+    }
+
+    if (length(pax2null) > 0) {
+      names <- colnames(npcs[, npcs$RNA_snn_res.0.5 %in% pax2null])
+      seurat[[]] <- within(seurat[[]], LineageID[LineageID %in% c('NPC') & rownames(seurat[[]]) %in% names] <- 'NPC-like')
+    } else {
+      # Every NPC cluster has PAX2 in >= 33% of its cells: none is NPC-like, so
+      # the NPC calls stand. (Previously this branch relabelled every NPC as
+      # NPC-like, the reverse of the rule, which emptied the NPC class in fetal
+      # kidney, where cap mesenchyme expresses PAX2.)
+      message("All NPC clusters express PAX2 - keeping NPC calls")
+    }
+
+    seurat@misc$NPC.seu <- npcs
+  } else if (npc_count > 0) {
+    message("Too few NPC cells (", npc_count, ") for refinement, labeling as NPC-like")
+    seurat[[]] <- within(seurat[[]], LineageID[LineageID %in% c('NPC')] <- 'NPC-like')
+  } else {
+    message("No NPC cells found, skipping NPC refinement")
+  }
+
+  dkcc <- seurat[[]] %>% rownames_to_column("cell") %>% filter(LineageID %in% c("unassigned", "NPC", "NPC-like", "Endo")) %>% transmute(cell = cell, dkcc = LineageID)
 
   # Accumulate cell metadata without merging Seurat objects.
   # merge.Seurat in v5 calls merge.Assay5 -> LayerData.Assay5 which crashes when
   # merging subsets that went through different scPredict runs. Since t1 is only
   # ever used for t1[[]] (metadata) at the end, we collect metadata as a plain
   # data.frame and bind_rows instead.
-  t1_meta <- seurat[[]] %>% rownames_to_column("cell") %>% filter(LineageID %in% c("unassigned", "NPC", "Endo"))
+  t1_meta <- seurat[[]] %>% rownames_to_column("cell") %>% filter(LineageID %in% c("unassigned", "NPC", "NPC-like", "Endo"))
 
   # Step 2: Nephron classification
   if (nrow(seurat[[]] %>% filter(LineageID == "Nephron")) > 2) {
@@ -239,59 +312,6 @@ DKCC <- function(seurat, threshold = 0.7, max.iter = 1, knn.iter = 20) {
   seurat[[]] <- left_join(md %>% rownames_to_column("cell") %>% select(cell),
                           t1_meta, by = "cell") %>% column_to_rownames("cell")
 
-  # NPC refinement
-  npc_count <- sum(seurat$LineageID == "NPC", na.rm = TRUE)
-
-  if (npc_count > 2) {
-    message("Refining NPC classification (", npc_count, " NPC cells)...")
-    npcs <- seurat[, which(seurat$LineageID == "NPC")]
-    DefaultAssay(npcs) <- "RNA"
-    npcs <- npcs %>% NormalizeData() %>% FindVariableFeatures() %>% ScaleData()
-    npcs$RNA_snn_res.0.5 <- 0
-
-    if (ncol(npcs) > 50) {
-      npcs <- npcs %>%
-        RunPCA(npcs = 20) %>% RunUMAP(dims = 1:20) %>% FindNeighbors() %>% FindClusters(resolution = 0.5)
-    }
-
-    # 'orig.ident' does not survive the metadata rebuild above for objects that
-    # arrived as h5ad (the per-lineage scPredict() outputs are recombined via
-    # bind_rows()/left_join(), which drops it). Its only use is to populate
-    # 'Identity', which nothing downstream reads -- the very next line replaces
-    # orig.ident with "all" for GeneSummary()'s grouping -- so guard rather than
-    # require it.
-    npcs$Identity <- if ("orig.ident" %in% colnames(npcs[[]])) npcs$orig.ident else NA_character_
-    npcs$orig.ident <- "all"
-
-    if ("PAX2" %in% rownames(npcs)) {
-      markers <- DevKidCC::GeneSummary(npcs, identity = "orig.ident", split.by = "RNA_snn_res.0.5", features = c("PAX2"))
-      pax2null <- (markers %>% filter(pct.exp < 33))$Component
-    } else {
-      # PAX2 was dropped by the zero-variance filter above -- common when a small
-      # chunk of NPC cells expresses no PAX2 at all. Every cluster is then
-      # PAX2-null by definition, which is what the else branch below concludes
-      # anyway; treating them all as NPC-like keeps that behaviour instead of
-      # erroring out inside GeneSummary().
-      message("PAX2 not present in NPC subset (zero variance in this chunk) - treating all NPC clusters as NPC-like")
-      pax2null <- levels(factor(as.character(npcs$RNA_snn_res.0.5)))
-    }
-
-    if (length(pax2null) > 0) {
-      names <- colnames(npcs[, npcs$RNA_snn_res.0.5 %in% pax2null])
-      seurat[[]] <- within(seurat[[]], LineageID[LineageID %in% c('NPC') & rownames(seurat[[]]) %in% names] <- 'NPC-like')
-      seurat[[]] <- within(seurat[[]], DKCC[DKCC %in% c('NPC') & rownames(seurat[[]]) %in% names] <- 'NPC-like')
-    } else {
-      seurat[[]] <- within(seurat[[]], DKCC[DKCC %in% c('NPC')] <- 'NPC-like')
-    }
-
-    seurat@misc$NPC.seu <- npcs
-  } else if (npc_count > 0) {
-    message("Too few NPC cells (", npc_count, ") for refinement, labeling as NPC-like")
-    seurat[[]] <- within(seurat[[]], DKCC[DKCC %in% c('NPC')] <- 'NPC-like')
-  } else {
-    message("No NPC cells found, skipping NPC refinement")
-  }
-
   return(seurat)
 }
 ## KNN smoothing function to classify false negatives. Requires dimensional reduction, UMAP works best in testing.
@@ -378,5 +398,3 @@ fill_unassigned_by_knn_seurat <- function(
   
   return(obj)
 }
-
-
