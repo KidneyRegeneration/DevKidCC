@@ -41,9 +41,15 @@ dependencies:
 
   # R: DevKidCC's own stack
   - r-seurat=5.5.1
-  - r-harmony=0.1.1
   - r-remotes=2.5.0
   - r-optparse=1.8.2
+  # harmony itself is 0.1.1 from the CRAN archive (docker/install.R): conda-forge
+  # has no 0.1.1 build. These are what that source install links against / imports.
+  - r-rcpparmadillo
+  - r-rcppprogress
+  - r-irlba
+  - r-cowplot
+  - r-tidyr
   # SeuratDisk::LoadH5Seurat is how docker/run_dkcc.R reads .h5seurat input,
   # which is one of the formats /opt/dkcc routes to the R side.
   - r-seurat-disk=0.0.0.9021
