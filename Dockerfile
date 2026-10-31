@@ -78,8 +78,8 @@ RUN Rscript -e 'remotes::install_local("/opt/scPred", upgrade="never")'
 COPY . /opt/DevKidCC
 WORKDIR /opt/DevKidCC
 RUN rm -f .Rprofile
-RUN Rscript -e 'remotes::install_local(".", upgrade="never")'
-
+RUN Rscript -e 'remotes::install_local(".", upgrade="never")' \
+ && Rscript -e 'library(DevKidCC); stopifnot(packageVersion("harmony") == "0.1.1")'
 # Sanity checks
 RUN python --version
 RUN python -c "import devkidcc"
