@@ -41,7 +41,7 @@ dependencies:
 
   # R: DevKidCC's own stack
   - r-seurat=5.5.1
-  - r-harmony=1.2.0
+  - r-harmony=0.1.1
   - r-remotes=2.5.0
   - r-optparse=1.8.2
   # SeuratDisk::LoadH5Seurat is how docker/run_dkcc.R reads .h5seurat input,
