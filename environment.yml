@@ -45,7 +45,7 @@ dependencies:
   - r-optparse=1.8.2
   # harmony itself is 0.1.1 from the CRAN archive (docker/install.R): conda-forge
   # has no 0.1.1 build. These are what that source install links against / imports.
-  - r-rcpparmadillo
+  - r-rcpparmadillo=14.6.3
   - r-rcppprogress
   - r-irlba
   - r-cowplot
